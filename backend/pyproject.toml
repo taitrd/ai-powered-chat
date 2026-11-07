@@ -1,0 +1,24 @@
+[project]
+name = "chat-app-backend"
+version = "0.1.0"
+requires-python = ">=3.12"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "ASYNC"]
+
+[tool.ruff.lint.isort]
+# The local alembic/ folder holds migrations; "alembic" imports are the library.
+known-first-party = ["app", "tests"]
+known-third-party = ["alembic"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI declares dependencies and query parameters as argument defaults.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Header"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

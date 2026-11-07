@@ -1,0 +1,55 @@
+# Local development stack. Values can be overridden in .env (see .env.example).
+# The frontend service is added in milestone M3.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: chat
+      POSTGRES_PASSWORD: chat
+      POSTGRES_DB: chat
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./backend/scripts/create-test-db.sql:/docker-entrypoint-initdb.d/01-create-test-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chat -d chat"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  api:
+    build:
+      context: ./backend
+      args:
+        INSTALL_DEV: "true"
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      AUTH_MODE: ${AUTH_MODE:-local}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://chat:chat@db:5432/chat}
+      TEST_DATABASE_URL: postgresql+asyncpg://chat:chat@db:5432/chat_test
+      DB_AUTH_MODE: ${DB_AUTH_MODE:-password}
+      LLM_DEFAULT: ${LLM_DEFAULT:-fake}
+      LLM_FALLBACKS: ${LLM_FALLBACKS:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-}
+      BEDROCK_ENABLED: ${BEDROCK_ENABLED:-false}
+      BEDROCK_MODEL_ID: ${BEDROCK_MODEL_ID:-anthropic.claude-haiku-5-5}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    depends_on:
+      db:
+        condition: service_healthy
+    # Local only: on AWS, migrations run as a separate deploy step.
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+
+volumes:
+  pgdata:
