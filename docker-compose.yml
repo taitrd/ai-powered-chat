@@ -1,7 +1,13 @@
 # Local development stack. Values can be overridden in .env (see .env.example).
+#
+#   docker compose up -d          everything below
+#   docker compose up -d db api   only what the API needs
+#
 # The frontend service is added in milestone M3.
 
 services:
+  # --- Core -----------------------------------------------------------------
+
   db:
     image: postgres:16-alpine
     environment:
@@ -39,6 +45,11 @@ services:
       BEDROCK_ENABLED: ${BEDROCK_ENABLED:-false}
       BEDROCK_MODEL_ID: ${BEDROCK_MODEL_ID:-anthropic.claude-haiku-5-5}
       AWS_REGION: ${AWS_REGION:-us-east-1}
+      # Local stand-ins for AWS services, for features that need them.
+      S3_ENDPOINT_URL: http://s3:8333
+      S3_BUCKET: ${S3_BUCKET:-chat-app-local}
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
     ports:
       - "8000:8000"
     volumes:
@@ -51,5 +62,82 @@ services:
       sh -c "alembic upgrade head &&
              uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
 
+  web:
+    build:
+      context: ./frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - api
+
+  # --- Dev tools ------------------------------------------------------------
+
+  pgadmin:
+    image: dpage/pgadmin4:8.14
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      # Desktop mode: no pgAdmin login screen. Local use only.
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+    # libpq needs the password file to be private, so copy it before starting.
+    entrypoint: >
+      sh -c "cp /config/pgpass /tmp/pgpass && chmod 600 /tmp/pgpass &&
+             exec /entrypoint.sh"
+    ports:
+      - "5050:80"
+    volumes:
+      - ./docker/pgadmin/servers.json:/pgadmin4/servers.json:ro
+      - ./docker/pgadmin/pgpass:/config/pgpass:ro
+      - pgadmin:/var/lib/pgadmin
+    depends_on:
+      db:
+        condition: service_healthy
+
+  mailpit:
+    image: axllent/mailpit:v1.21
+    ports:
+      - "8025:8025" # Web UI
+      - "1025:1025" # SMTP
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  s3:
+    # SeaweedFS: Apache 2.0, S3-compatible. With no identities configured,
+    # it accepts any access key, which is fine for local development only.
+    image: chrislusf/seaweedfs:3.80
+    command: server -dir=/data -s3 -s3.port=8333 -master.volumeSizeLimitMB=64 -volume.max=0
+    ports:
+      - "8333:8333" # S3 API
+      - "8888:8888" # File browser
+    volumes:
+      - s3data:/data
+
+  s3-init:
+    # Creates the local bucket once S3 is up, then exits.
+    image: amazon/aws-cli:2.22.0
+    environment:
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
+      AWS_DEFAULT_REGION: us-east-1
+      S3_BUCKET: ${S3_BUCKET:-chat-app-local}
+    entrypoint: >
+      sh -c "for i in $$(seq 1 30); do
+               aws --endpoint-url http://s3:8333 s3api head-bucket --bucket $$S3_BUCKET 2>/dev/null && exit 0;
+               aws --endpoint-url http://s3:8333 s3 mb s3://$$S3_BUCKET && exit 0;
+               sleep 2;
+             done; echo 'S3 bucket setup failed' >&2; exit 1"
+    depends_on:
+      - s3
+    restart: "no"
+
 volumes:
   pgdata:
+  pgadmin:
+  s3data:

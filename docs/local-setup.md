@@ -22,11 +22,30 @@ docker compose up --build
 open http://localhost:5173
 ```
 
-| Service | URL |
-| :--- | :--- |
-| Frontend (added in M3) | http://localhost:5173 |
-| API | http://localhost:8000, with interactive docs at http://localhost:8000/docs |
-| PostgreSQL | `localhost:5432` (user `chat`, password `chat`) |
+| Service | URL | Login |
+| :--- | :--- | :--- |
+| Frontend (added in M3) | http://localhost:5173 | Development user |
+| API | http://localhost:8000, with docs at http://localhost:8000/docs | Development user |
+| PostgreSQL | `localhost:5432` | `chat` / `chat` |
+| pgAdmin (database GUI) | http://localhost:5050 | None. The `chat (local)` server is preconfigured. |
+| Mailpit (catches email) | http://localhost:8025, SMTP on `localhost:1025` | None |
+| S3-compatible storage (SeaweedFS) | API on http://localhost:8333, file browser on http://localhost:8888 | Any access key. Bucket `chat-app-local` is created automatically. |
+
+These logins are for local development only. Never expose these ports on a shared network.
+
+**Shortcuts:** `make up` starts everything, and `make up-core` starts only the database and API. Run `make` to list all commands, including `test`, `logs`, `psql` and `reset`.
+
+**Why these tools:**
+- **Mailpit** stands in for Cognito's emails, such as sign-up codes.
+- **SeaweedFS** stands in for S3. MinIO stopped publishing free Docker images in 2025, and SeaweedFS is a maintained Apache 2.0 alternative.
+- **LocalStack** isn't included, because it now requires an account token.
+
+To try S3 from your machine:
+
+```bash
+AWS_ACCESS_KEY_ID=local AWS_SECRET_ACCESS_KEY=local \
+  aws --endpoint-url http://localhost:8333 s3 ls s3://chat-app-local
+```
 
 Database migrations run automatically when the API starts locally.
 
@@ -73,6 +92,8 @@ OpenAI works the same way with `OPENAI_API_KEY` and `OPENAI_MODEL`. Claude on Be
 | `MAX_OUTPUT_TOKENS` | `8000` | Longest reply |
 | `DAILY_USER_MESSAGE_LIMIT` | `30` | Messages per user per day |
 | `DAILY_GLOBAL_MESSAGE_LIMIT` | `200` | Messages across all users per day |
+| `S3_BUCKET` | `chat-app-local` | Local bucket name. Docker Compose sets `S3_ENDPOINT_URL` to the SeaweedFS container. |
+| `SMTP_HOST`, `SMTP_PORT` | `mailpit`, `1025` | Set by Docker Compose, so local email goes to Mailpit |
 
 ## Run tests
 
@@ -96,4 +117,6 @@ Tests never call real AI APIs, so they use no quota and cost nothing.
 | Port already in use | Stop the other service, or change the port in `docker-compose.yml` |
 | `AuthFailed` from Gemini | Check `GEMINI_API_KEY` and that `GEMINI_MODEL` exists for your account |
 | `429` with "free quota reached" | Wait for the Gemini quota to reset, or switch to `LLM_DEFAULT=fake` |
-| Old data after schema changes | Reset the database with `docker compose down -v` (deletes local data) |
+| Old data after schema changes | Reset with `make reset` (deletes all local data) |
+| `s3-init` shows "Could not connect" a few times | Normal. SeaweedFS takes about 20 seconds to start, and the job retries until it's ready. |
+| pgAdmin asks for a password | Enter `chat`. The saved connection normally uses a password file, so this only happens if the file wasn't copied. |
