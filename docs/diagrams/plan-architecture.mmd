@@ -1,0 +1,14 @@
+flowchart LR
+    Client([User Browser]) -->|HTTPS custom domain| CF[CloudFront<br/>Route 53 + ACM]
+    Client -.->|Sign in, get JWT| Cognito[Cognito User Pool]
+
+    subgraph AWS["AWS (single region: us-east-1)"]
+        CF -->|Static assets| S3[(S3 private bucket)]
+        CF -->|"/api/* and SSE"| URL[Lambda Function URL<br/>response streaming]
+        URL --> Lambda[Lambda container<br/>FastAPI + Web Adapter]
+        Lambda -->|IAM token over TLS| Aurora[(Aurora PostgreSQL Serverless<br/>express config, pauses when idle)]
+    end
+
+    Lambda -->|Default: free tier| Gemini[Gemini API]
+    Lambda -.->|Optional| OpenAI[OpenAI API]
+    Lambda -.->|Optional| Bedrock[Claude on Bedrock]

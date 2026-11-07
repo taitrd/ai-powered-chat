@@ -1,0 +1,28 @@
+erDiagram
+    USERS ||--o{ CONVERSATIONS : owns
+    CONVERSATIONS ||--o{ MESSAGES : contains
+
+    USERS {
+        uuid id PK
+        string cognito_sub UK
+        timestamp created_at
+    }
+
+    CONVERSATIONS {
+        uuid id PK
+        uuid user_id FK
+        string title
+        string provider_id "null means default"
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    MESSAGES {
+        uuid id PK
+        uuid conversation_id FK
+        string role "user or assistant"
+        text content
+        string provider "assistant only"
+        string model "assistant only"
+        timestamp created_at
+    }

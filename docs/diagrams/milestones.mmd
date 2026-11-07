@@ -1,0 +1,8 @@
+flowchart TD
+    M0[M0: Proof of concept on AWS] -->|Pass| M1[M1: Local foundation]
+    M0 -.->|Fail| F[Fall back to EC2 design]
+    M1 --> M2[M2: AI providers and streaming]
+    M2 --> M3[M3: Frontend with Zustand]
+    M3 --> M4[M4: Authentication]
+    M4 --> M5[M5: AWS deployment]
+    M5 --> M6[M6: CI/CD and docs]

@@ -1,0 +1,9 @@
+flowchart LR
+    Chat[Chat endpoint] --> Registry[Provider registry]
+    Registry --> OAC[openai_compatible adapter]
+    Registry --> BR[bedrock adapter]
+    Registry --> Fake[fake adapter for tests]
+    OAC --> G[Gemini]
+    OAC --> O[OpenAI]
+    OAC --> N[Future compatible providers]
+    BR --> C[Claude on Bedrock]

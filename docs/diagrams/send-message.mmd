@@ -1,0 +1,17 @@
+sequenceDiagram
+    participant B as Browser
+    participant L as Lambda (FastAPI)
+    participant D as Aurora
+    participant A as AI provider
+
+    B->>L: POST /api/v1/conversations/{id}/messages (JWT)
+    L->>L: Check JWT and limits
+    L->>D: Save user message, load recent history
+    Note over L,D: Connection closed before streaming
+    L->>A: Stream request
+    loop Each chunk
+        A-->>L: Text
+        L-->>B: SSE data with delta
+    end
+    L->>D: Save the full reply
+    L-->>B: data [DONE]

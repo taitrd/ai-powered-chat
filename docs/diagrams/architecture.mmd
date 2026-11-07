@@ -1,0 +1,12 @@
+flowchart LR
+    Browser([Browser]) -->|HTTPS| CF[CloudFront<br/>custom domain]
+    Browser -.->|Sign in| Cognito[Cognito]
+
+    subgraph AWS["AWS (us-east-1)"]
+        CF -->|Website files| S3[(S3)]
+        CF -->|"/api/*"| Lambda[Lambda<br/>FastAPI]
+        Lambda -->|IAM login, TLS| Aurora[(Aurora PostgreSQL<br/>pauses when idle)]
+        Guard[Awake guard<br/>every 15 min] -.->|Pauses API above daily cap| Lambda
+    end
+
+    Lambda --> AI[AI provider<br/>Gemini, OpenAI or Claude]

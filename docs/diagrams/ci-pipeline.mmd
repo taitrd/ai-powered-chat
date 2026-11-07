@@ -1,0 +1,7 @@
+flowchart LR
+    PR[Pull request] --> T[Lint, type-check, test, cdk synth]
+    Main[Push to main] --> T2[Same checks]
+    T2 --> M[Run Alembic migrations]
+    M --> B[Build frontend]
+    B --> D["cdk deploy --all<br/>builds image, updates Lambda and S3"]
+    D --> S[Smoke test the live URL]
