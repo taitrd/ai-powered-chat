@@ -20,6 +20,15 @@ class Settings(BaseSettings):
     cognito_client_id: str = ""
     aws_region: str = "us-east-1"
 
+    llm_default: str = "fake"
+    llm_fallbacks: str = ""
+    gemini_api_key: str = ""
+    gemini_model: str = ""
+    openai_api_key: str = ""
+    openai_model: str = ""
+    bedrock_enabled: bool = False
+    bedrock_model_id: str = "anthropic.claude-haiku-5-5"
+
     max_message_chars: int = 4000
     max_output_tokens: int = 8000
     daily_user_message_limit: int = 30

@@ -1,0 +1,22 @@
+- id: fake
+  label: Fake (Local)
+  adapter: fake
+- id: gemini
+  label: Gemini
+  adapter: openai_compatible
+  base_url: https://generativelanguage.googleapis.com/v1beta/openai/
+  model_env: GEMINI_MODEL
+  default_model: gemini-2.0-flash
+  api_key_env: GEMINI_API_KEY
+- id: openai
+  label: ChatGPT
+  adapter: openai_compatible
+  base_url: https://api.openai.com/v1
+  model_env: OPENAI_MODEL
+  default_model: gpt-4o-mini
+  api_key_env: OPENAI_API_KEY
+- id: claude
+  label: Claude
+  adapter: bedrock
+  model_env: BEDROCK_MODEL_ID
+  default_model: anthropic.claude-haiku-5-5

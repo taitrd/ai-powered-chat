@@ -32,6 +32,11 @@ class ConversationPage(BaseModel):
     next_cursor: str | None
 
 
+class MessageCreate(BaseModel):
+    content: str
+    provider_id: str | None = None
+
+
 class MessageOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -41,3 +46,10 @@ class MessageOut(BaseModel):
     provider: str | None
     model: str | None
     created_at: datetime
+
+
+class ProviderOut(BaseModel):
+    id: str
+    label: str
+    model: str
+
