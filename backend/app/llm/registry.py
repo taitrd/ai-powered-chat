@@ -14,9 +14,6 @@ from app.llm.base import (
     TextDelta,
     Unavailable,
 )
-from app.llm.bedrock import BedrockProvider
-from app.llm.fake import FakeProvider
-from app.llm.openai_compatible import OpenAICompatibleProvider
 
 PROVIDERS_FILE = Path(__file__).parent / "providers.yaml"
 
@@ -116,12 +113,20 @@ class ProviderRegistry:
         adapter = cfg.get("adapter", "fake")
 
         if adapter == "fake":
+            from app.llm.fake import FakeProvider
+
             return FakeProvider(model_name=model)
         elif adapter == "openai_compatible":
+            from app.llm.openai_compatible import OpenAICompatibleProvider
+
             api_key = getattr(settings, cfg.get("api_key_env", "").lower(), "")
             base_url = cfg.get("base_url", "https://api.openai.com/v1")
             return OpenAICompatibleProvider(api_key=api_key, base_url=base_url, model=model)
         elif adapter == "bedrock":
+            try:
+                from app.llm.bedrock import BedrockProvider
+            except ImportError as exc:
+                raise Unavailable(f"Bedrock dependencies not installed: {exc}") from exc
             return BedrockProvider(model_id=model, region_name=settings.aws_region)
         else:
             raise Unavailable(f"Unknown adapter: {adapter}")
