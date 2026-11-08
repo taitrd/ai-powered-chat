@@ -45,13 +45,15 @@ Short records of the main choices, and when to revisit them. The full reasoning 
 
 **Not chosen:** LiteLLM and LangChain, which are large dependencies for about 50 lines of code per adapter.
 
-## 4. Zustand for frontend state
+## 4. Redux Toolkit for frontend state
 
-**Decision:** Four Zustand stores: `auth`, `conversations`, `chat` and `ui`.
+**Decision:** Four Redux Toolkit slices: `auth`, `conversations`, `chat` and `ui`. API calls happen only in async thunks.
 
-**Why:** It feels like Redux, with stores, actions and selectors, but needs much less code. It also works with Redux DevTools.
+**Why:** The team already knows Redux. Slices, thunks and Redux DevTools give a predictable structure that new developers and AI coding agents can follow (see [`frontend/agent/CONVENTIONS.md`](../frontend/agent/CONVENTIONS.md)).
 
-**Not chosen:** Redux Toolkit, which needs more boilerplate, and TanStack Query, which would be a second state library.
+**Trade-off:** More code than Zustand, and about 10 KB more JavaScript after compression. State must stay serializable, so the stream's `AbortController` lives outside the store.
+
+**Not chosen:** Zustand, which was used first and replaced for familiarity, and TanStack Query, which would be a second state library.
 
 ## 5. Cognito for authentication
 

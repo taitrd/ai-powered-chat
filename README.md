@@ -21,7 +21,7 @@ A small AI chat app with saved conversations, user accounts and streaming replie
 
 | Part | Technology |
 | :--- | :--- |
-| Frontend | React, TypeScript, Vite, Tailwind CSS, Zustand |
+| Frontend | React, TypeScript, Vite, Tailwind CSS, Redux Toolkit |
 | Backend | Python, FastAPI, running on AWS Lambda |
 | Database | Aurora PostgreSQL Serverless, which pauses when idle |
 | Auth | Amazon Cognito |
@@ -56,9 +56,11 @@ Then open the API docs at http://localhost:8000/docs. The web app at http://loca
 ## Repository layout
 
 ```text
-backend/    FastAPI app, AI provider adapters, tests
-frontend/   React app and Zustand stores
+backend/    FastAPI app, AI provider adapters, tests   → see backend/README.md
+frontend/   React app and Redux Toolkit store          → see frontend/README.md
 iac/        AWS CDK stacks
 docs/       Short guides linked above
 .github/    CI/CD workflows
 ```
+
+Each of `backend/` and `frontend/` has an `agent/` folder with coding conventions and feature steps, for AI coding agents and new developers.

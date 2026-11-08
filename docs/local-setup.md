@@ -118,5 +118,6 @@ Tests never call real AI APIs, so they use no quota and cost nothing.
 | `AuthFailed` from Gemini | Check `GEMINI_API_KEY` and that `GEMINI_MODEL` exists for your account |
 | `429` with "free quota reached" | Wait for the Gemini quota to reset, or switch to `LLM_DEFAULT=fake` |
 | Old data after schema changes | Reset with `make reset` (deletes all local data) |
+| Frontend can't find a package after `package.json` changed | Rebuild with fresh `node_modules`: `docker compose up -d --build --renew-anon-volumes web` |
 | `s3-init` shows "Could not connect" a few times | Normal. SeaweedFS takes about 20 seconds to start, and the job retries until it's ready. |
 | pgAdmin asks for a password | Enter `chat`. The saved connection normally uses a password file, so this only happens if the file wasn't copied. |
