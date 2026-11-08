@@ -8,7 +8,6 @@ from app.llm.base import (
     Refused,
     StreamEnd,
     TextDelta,
-    Unavailable,
 )
 from app.llm.fake import FakeProvider
 from app.llm.registry import ProviderRegistry

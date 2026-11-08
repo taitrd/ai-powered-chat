@@ -3,7 +3,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.v1 import chat
+from app.api.v1.router import api_router as api_v1_router
 from app.core.config import get_settings
 
 
@@ -21,8 +21,7 @@ def create_app() -> FastAPI:
             allow_headers=["*"],
         )
 
-    app.include_router(chat.router, prefix="/api/v1")
-    app.include_router(chat.models_router, prefix="/api/v1")
+    app.include_router(api_v1_router, prefix="/api/v1")
 
     @app.get("/healthz", tags=["health"])
     async def healthz() -> dict[str, str]:

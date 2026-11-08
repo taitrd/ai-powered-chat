@@ -1,6 +1,7 @@
 """AWS Bedrock ConverseStream adapter for Claude models."""
 
 from collections.abc import AsyncIterator
+
 import anyio
 import boto3
 from botocore.exceptions import ClientError

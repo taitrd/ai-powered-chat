@@ -1,6 +1,7 @@
 """Tests for message creation, SSE streaming, and limit enforcement."""
 
 import json
+
 import httpx
 import pytest
 

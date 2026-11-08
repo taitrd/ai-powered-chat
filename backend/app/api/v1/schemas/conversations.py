@@ -1,4 +1,4 @@
-"""Request and response models for the v1 API."""
+"""Conversation schemas."""
 
 import uuid
 from datetime import datetime
@@ -30,26 +30,3 @@ class ConversationOut(BaseModel):
 class ConversationPage(BaseModel):
     items: list[ConversationOut]
     next_cursor: str | None
-
-
-class MessageCreate(BaseModel):
-    content: str
-    provider_id: str | None = None
-
-
-class MessageOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: uuid.UUID
-    role: str
-    content: str
-    provider: str | None
-    model: str | None
-    created_at: datetime
-
-
-class ProviderOut(BaseModel):
-    id: str
-    label: str
-    model: str
-

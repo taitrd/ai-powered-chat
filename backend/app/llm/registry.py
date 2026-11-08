@@ -3,6 +3,7 @@
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from pathlib import Path
+
 import yaml
 
 from app.core.config import get_settings

@@ -1,6 +1,7 @@
 """OpenAI-compatible adapter for Gemini and OpenAI endpoints."""
 
 from collections.abc import AsyncIterator
+
 import openai
 from openai import AsyncOpenAI
 
@@ -84,7 +85,7 @@ class OpenAICompatibleProvider:
         except openai.APIConnectionError as exc:
             raise Unavailable(f"Connection dropped mid-stream: {exc}") from exc
         except Exception as exc:
-            if isinstance(exc, (Refused, RateLimited, Unavailable)):
+            if isinstance(exc, Refused | RateLimited | Unavailable):
                 raise
             raise LLMError(f"Error during streaming: {exc}") from exc
 
