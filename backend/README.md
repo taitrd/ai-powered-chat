@@ -1,44 +1,37 @@
 # Backend
 
-FastAPI service for the chat app. It provides conversations, messages, streamed AI replies (SSE) and the provider list, and stores data in PostgreSQL. It runs in Docker locally and on AWS Lambda in production.
-
-## Agent and contributor docs
-
-Read these before changing backend code:
-
-| Document | What it covers |
-| :--- | :--- |
-| [`agent/CONVENTIONS.md`](agent/CONVENTIONS.md) | Layer rules, data access and security, AI providers, settings, errors, style |
-| [`agent/IMPLEMENTATION.md`](agent/IMPLEMENTATION.md) | Step-by-step guide for adding an endpoint or resource |
-
-Project-wide docs: [architecture](../docs/architecture.md), [local setup](../docs/local-setup.md), [deployment](../docs/deployment.md), [design decisions](../docs/design-decisions.md) and the [plan](../PLAN.md).
-
-## Commands
-
-Run these from the repository root. They use Docker, so you don't need a local Python setup.
-
-| Command | What it does |
-| :--- | :--- |
-| `make up-core` | Start PostgreSQL and the API on http://localhost:8000, with docs at `/docs` |
-| `make test` | Run pytest against a real PostgreSQL test database |
-| `make lint` | Check lint and formatting with Ruff |
-| `make migrate` | Apply Alembic migrations |
-| `make logs` | Follow API logs |
-
-Locally, requests are made as the user `dev`. Add the header `X-Dev-User: alice` to act as another user.
+FastAPI service for the chat app. It manages conversations, messages, SSE streaming AI replies, and provider models with PostgreSQL persistence.
 
 ## Layout
 
 ```text
 app/
-  api/v1/chat.py     Conversation, message, models and SSE endpoints
-  api/v1/schemas.py  Request and response models
-  core/config.py     Settings from environment variables
-  core/security.py   Current-user dependency (local dev users now, Cognito in M4)
-  db/models.py       SQLAlchemy models
-  db/session.py      Engine with NullPool, per-request sessions
-  llm/               Provider interface, registry, adapters, providers.yaml
-  main.py            App factory and /healthz
-alembic/             Migrations
-tests/               pytest suite (real PostgreSQL, fake AI provider)
+  api/v1/         HTTP routes (conversations, messages, models) and schemas
+  repositories/   Data access: plain async SQL functions filtered by user_id
+  services/       Business logic: limits, auto-title, SSE stream orchestration
+  core/           Settings (config.py) and authentication guards (security.py)
+  db/             SQLAlchemy models and sessionmaker (NullPool)
+  llm/            AI provider adapters (fake, gemini, openai, claude) and registry
+  main.py         FastAPI app entrypoint and /healthz
+alembic/          Database migrations
+tests/            Pytest test suite (real PostgreSQL in Docker)
 ```
+
+## Quick Commands
+
+Run from the repository root:
+
+| Command | What it does |
+| :--- | :--- |
+| `make up-core` | Start PostgreSQL and the API on `http://localhost:8000` (`/docs` for Swagger) |
+| `make test` | Run pytest against real PostgreSQL test database in Docker |
+| `make lint` | Check formatting and linting with Ruff |
+| `make migrate` | Apply latest Alembic migrations |
+| `make logs` | Follow API container logs |
+
+*Local dev uses `X-Dev-User: <username>` (defaults to `dev`).*
+
+## Documentation
+
+- [`agent/CONVENTIONS.md`](agent/CONVENTIONS.md) — Layer boundaries, ownership rules, and style guidelines.
+- [`agent/IMPLEMENTATION.md`](agent/IMPLEMENTATION.md) — Step-by-step checklist for adding a backend feature.

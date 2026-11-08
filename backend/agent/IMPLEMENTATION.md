@@ -1,67 +1,43 @@
-# Implement a Backend Feature
+# Feature Implementation Checklist
 
-Steps for adding an API resource or endpoint. Follow [`CONVENTIONS.md`](CONVENTIONS.md) throughout.
+Follow these 6 steps in order when adding or updating backend features. Adhere to [`CONVENTIONS.md`](CONVENTIONS.md) throughout.
 
-## Overview
+---
 
-> The work moves through Schemas → Models and migration → Repositories → Services → Routes → Tests. Do each layer in order, and keep existing endpoints and response shapes backward compatible, because the frontend and cached browser data depend on them.
+### Step 1: Schemas (`app/api/v1/schemas/<resource>.py`)
+- Define request models (`<Resource>Create`, `<Resource>Update`) and response models (`<Resource>Out`).
+- Use `ConfigDict(from_attributes=True)` on response models.
+- Re-export models in `app/api/v1/schemas/__init__.py`.
+- Sync corresponding shapes with `frontend/src/types.ts`.
 
-## Steps
+### Step 2: Models & Migrations (`app/db/models.py`, `alembic/versions/`)
+- Add or update SQLAlchemy models (UUID primary keys, `timestamptz`, `ON DELETE CASCADE`).
+- Create migration: `docker compose run --rm api alembic revision -m "<change>"`.
+- Write backward-compatible `upgrade()` and `downgrade()` methods.
+- Test migration locally: `make migrate`.
 
-### 1. Schemas (`app/api/v1/schemas/`)
+### Step 3: Repositories (`app/repositories/<resource>.py`)
+- Write plain async functions for all SQL queries.
+- Accept `session: AsyncSession` and `user_id: uuid.UUID` on all user-scoped data.
+- Return domain models or `None`. Do **not** raise `HTTPException`.
 
-- Add request models (`<resource>.py`: `<Resource>Create`, `<Resource>Update`) and response models (`<Resource>Out`).
-- Reuse existing types, such as `Title`, rather than duplicating validation.
-- Response models use `ConfigDict(from_attributes=True)`.
-- Re-export new models in `app/api/v1/schemas/__init__.py`.
-- Keep frontend `src/types.ts` in step with these shapes.
+### Step 4: Services (`app/services/<feature>.py`)
+- Implement business rules (validation, limits, LLM orchestration, auto-titling).
+- Raise domain exceptions (e.g. `LimitExceededError`). Do **not** import FastAPI.
+- For new AI providers, add adapter in `app/llm/` and entry in `providers.yaml`.
 
-### 2. Models and migration (`app/db/models.py`, `alembic/versions/`)
+### Step 5: Routes (`app/api/v1/<resource>.py`)
+- Implement thin HTTP handlers.
+- Inject dependencies: `user: User = Depends(get_current_user)`, `session: AsyncSession = Depends(get_session)`.
+- Catch service exceptions and raise `HTTPException(status_code, detail)`.
+- Register the router in `app/api/v1/router.py`.
 
-- Add or change the SQLAlchemy model, using UUID keys and `timestamptz` columns.
-- Add indexes for queries you'll run, such as `user_id` with a sort column.
-- Use `ON DELETE CASCADE` for child rows.
-- Write a migration:
-  1. Create it with `docker compose run --rm api alembic revision -m "<change>"`.
-  2. Write `upgrade()` and `downgrade()` by hand.
-  3. Make it backward compatible: add first, remove in a later release.
-- Check it rolls back and reapplies: `alembic downgrade -1 && alembic upgrade head`.
-
-### 3. Repositories (`app/repositories/`)
-
-- Add plain async query functions in `app/repositories/<resource>.py`.
-- Every query operating on user data MUST accept `user_id: uuid.UUID` and filter by it.
-- Never write business rules or raise `HTTPException` in repositories.
-
-### 4. Services (`app/services/`, `app/llm/`)
-
-- Put logic that isn't HTTP-specific here: limits, provider calls, auto-titling, formatting.
-- Services receive plain values or an `AsyncSession`, never FastAPI `Request` objects.
-- Services raise custom domain exceptions (e.g. `LimitExceededError`), never `HTTPException`.
-- For a new AI provider, add an adapter in `app/llm/` and an entry in `providers.yaml`.
-
-### 5. Routes (`app/api/v1/`)
-
-- Add thin handlers in `app/api/v1/<resource>.py`, and register any new router in `app/api/v1/router.py`.
-- **Required dependencies:**
-  - `user: User = Depends(get_current_user)`
-  - `session: AsyncSession = Depends(get_session)`
-- **Ownership:** load owned rows with a `user_id` filter via repository, and return `404` when there's no match.
-- Keep handlers thin: parse requests, call services/repositories, map exceptions to HTTP status codes, return schemas.
-
-### 6. Tests (`tests/`)
-
-- Add `tests/test_<resource>.py`, marked `pytestmark = pytest.mark.anyio`.
-- Unit test services and repositories directly for speed and edge-case coverage.
-- Integration test API routes using `client` fixture and `as_user("alice")` headers:
-  - Success cases.
-  - Validation (`422` or `400`).
-  - Unknown ID (`404`).
-  - **Another user's data (`404`).**
-  - Limit enforcement (`429`).
-- Mock AI providers. Never use real keys in tests.
-
-### 7. Docs
-
-- **New settings:** document them in `docs/local-setup.md` and `.env.example`.
-- **Architecture or cost changes:** update `docs/architecture.md` or `docs/design-decisions.md`.
+### Step 6: Tests (`tests/`)
+- Add unit tests in `tests/test_services.py` or `tests/test_repositories.py`.
+- Add route tests in `tests/test_<resource>.py` covering:
+  - Happy path.
+  - Validation failures (`400` / `422`).
+  - Missing resource (`404`).
+  - Other user's data returns `404`.
+  - Rate limits (`429`).
+- Run `make test` and `make lint`.
