@@ -24,3 +24,5 @@ cdk.out/
 .vscode/
 
 docs/diagrams/*.png
+
+PLAN.md
