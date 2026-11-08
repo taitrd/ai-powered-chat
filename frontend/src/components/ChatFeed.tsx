@@ -3,7 +3,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Bot, Sparkles, User as UserIcon } from "lucide-react";
 import { Message } from "../types";
-import { useChatStore } from "../stores/chatStore";
+import { useAppSelector } from "../stores/hooks";
 
 interface ChatFeedProps {
   messages: Message[];
@@ -16,8 +16,8 @@ export const ChatFeed: React.FC<ChatFeedProps> = ({
   loading,
   activeConversationTitle,
 }) => {
-  const streamingContent = useChatStore((s) => s.streamingContent);
-  const streamStatus = useChatStore((s) => s.streamStatus);
+  const streamingContent = useAppSelector((s) => s.chat.streamingContent);
+  const streamStatus = useAppSelector((s) => s.chat.streamStatus);
 
   const scrollRef = useRef<HTMLDivElement>(null);
 

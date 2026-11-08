@@ -1,10 +1,13 @@
 import React from "react";
 import { AlertCircle, CheckCircle, Info, RefreshCw, X } from "lucide-react";
-import { useUiStore } from "../stores/uiStore";
+import { useAppDispatch, useAppSelector } from "../stores/hooks";
+import { sendMessage } from "../stores/features/chat/chatThunks";
+import { toastRemoved } from "../stores/features/ui/uiSlice";
 
 export const ToastContainer: React.FC = () => {
-  const toasts = useUiStore((s) => s.toasts);
-  const removeToast = useUiStore((s) => s.removeToast);
+  const dispatch = useAppDispatch();
+  const toasts = useAppSelector((s) => s.ui.toasts);
+  const removeToast = (id: string) => dispatch(toastRemoved(id));
 
   if (toasts.length === 0) return null;
 
@@ -27,11 +30,11 @@ export const ToastContainer: React.FC = () => {
 
           <div className="flex-1">
             <p className="font-medium">{toast.message}</p>
-            {toast.retry && (
+            {toast.retryMessage && (
               <button
                 onClick={() => {
                   removeToast(toast.id);
-                  toast.retry?.();
+                  if (toast.retryMessage) dispatch(sendMessage(toast.retryMessage));
                 }}
                 className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-red-700 hover:text-red-900 underline"
               >

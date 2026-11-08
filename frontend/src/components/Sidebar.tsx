@@ -10,30 +10,38 @@ import {
   User as UserIcon,
   PanelLeftClose,
 } from "lucide-react";
-import { useConversationStore } from "../stores/conversationStore";
-import { useUiStore } from "../stores/uiStore";
-import { useAuthStore } from "../stores/authStore";
+import { useAppDispatch, useAppSelector } from "../stores/hooks";
+import { switchDevUser } from "../stores/features/auth/authThunks";
+import {
+  createConversation,
+  deleteConversation,
+  openConversation,
+  renameConversation,
+} from "../stores/features/conversations/conversationsThunks";
+import { modelSelected, sidebarOpenSet } from "../stores/features/ui/uiSlice";
+
+const closeOnMobile = (close: () => void) => {
+  if (window.innerWidth < 768) close();
+};
 
 export const Sidebar: React.FC = () => {
-  const conversations = useConversationStore((s) => s.conversations);
-  const activeId = useConversationStore((s) => s.activeId);
-  const selectConversation = useConversationStore((s) => s.selectConversation);
-  const createConversation = useConversationStore((s) => s.createConversation);
-  const renameConversation = useConversationStore((s) => s.renameConversation);
-  const deleteConversation = useConversationStore((s) => s.deleteConversation);
-  const loading = useConversationStore((s) => s.loading);
+  const dispatch = useAppDispatch();
+  const conversations = useAppSelector((s) => s.conversations.items);
+  const activeId = useAppSelector((s) => s.conversations.activeId);
+  const loadingConversations = useAppSelector((s) => s.conversations.loadingConversations);
+  const creatingConversation = useAppSelector((s) => s.conversations.creatingConversation);
+  const pendingIds = useAppSelector((s) => s.conversations.pendingIds);
 
-  const sidebarOpen = useUiStore((s) => s.sidebarOpen);
-  const setSidebarOpen = useUiStore((s) => s.setSidebarOpen);
-  const models = useUiStore((s) => s.models);
-  const selectedModelId = useUiStore((s) => s.selectedModelId);
-  const setSelectedModelId = useUiStore((s) => s.setSelectedModelId);
+  const sidebarOpen = useAppSelector((s) => s.ui.sidebarOpen);
+  const models = useAppSelector((s) => s.ui.models);
+  const selectedModelId = useAppSelector((s) => s.ui.selectedModelId);
 
-  const devUser = useAuthStore((s) => s.devUser);
-  const setDevUser = useAuthStore((s) => s.setDevUser);
+  const devUser = useAppSelector((s) => s.auth.devUser);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
+
+  const closeSidebar = () => dispatch(sidebarOpenSet(false));
 
   const handleStartRename = (id: string, currentTitle: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -41,27 +49,23 @@ export const Sidebar: React.FC = () => {
     setEditingTitle(currentTitle);
   };
 
-  const handleSaveRename = async (id: string, e: React.MouseEvent) => {
+  const handleSaveRename = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (editingTitle.trim()) {
-      await renameConversation(id, editingTitle.trim());
-    }
+    const title = editingTitle.trim();
+    if (title) dispatch(renameConversation({ id, title }));
     setEditingId(null);
   };
 
-  const handleDelete = async (id: string, e: React.MouseEvent) => {
+  const handleDelete = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (confirm("Delete this conversation?")) {
-      await deleteConversation(id);
+      dispatch(deleteConversation(id));
     }
   };
 
   const handleNewChat = async () => {
-    const newConv = await createConversation();
-    selectConversation(newConv.id);
-    if (window.innerWidth < 768) {
-      setSidebarOpen(false);
-    }
+    const result = await dispatch(createConversation());
+    if (createConversation.fulfilled.match(result)) closeOnMobile(closeSidebar);
   };
 
   return (
@@ -70,7 +74,7 @@ export const Sidebar: React.FC = () => {
       {sidebarOpen && (
         <div
           className="fixed inset-0 bg-black/40 z-30 md:hidden backdrop-blur-sm transition-opacity"
-          onClick={() => setSidebarOpen(false)}
+          onClick={closeSidebar}
         />
       )}
 
@@ -91,7 +95,7 @@ export const Sidebar: React.FC = () => {
             </div>
           </div>
           <button
-            onClick={() => setSidebarOpen(false)}
+            onClick={closeSidebar}
             className="md:hidden text-gray-400 hover:text-white p-1 rounded-md"
             title="Close sidebar"
           >
@@ -103,6 +107,7 @@ export const Sidebar: React.FC = () => {
         <div className="p-3">
           <button
             onClick={handleNewChat}
+            disabled={creatingConversation}
             className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-sm font-medium shadow transition-all active:scale-[0.99]"
           >
             <Plus className="w-4 h-4" />
@@ -119,7 +124,7 @@ export const Sidebar: React.FC = () => {
             <div className="relative">
               <select
                 value={selectedModelId}
-                onChange={(e) => setSelectedModelId(e.target.value)}
+                onChange={(e) => dispatch(modelSelected(e.target.value))}
                 className="w-full bg-gray-800/90 hover:bg-gray-800 text-xs text-gray-200 rounded-lg px-2.5 py-2 border border-gray-700/80 focus:outline-none focus:ring-1 focus:ring-brand-500 transition-colors"
               >
                 {models.map((m) => (
@@ -136,7 +141,7 @@ export const Sidebar: React.FC = () => {
         <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1">
           <div className="text-[11px] font-medium text-gray-400 px-2 py-1">Recent Chats</div>
 
-          {loading && conversations.length === 0 ? (
+          {loadingConversations && conversations.length === 0 ? (
             <div className="space-y-2 px-2 py-3">
               {[1, 2, 3].map((i) => (
                 <div key={i} className="h-8 bg-gray-800/50 rounded-lg animate-pulse" />
@@ -150,17 +155,19 @@ export const Sidebar: React.FC = () => {
             conversations.map((conv) => {
               const isActive = conv.id === activeId;
               const isEditing = editingId === conv.id;
+              const isPending = pendingIds.includes(conv.id);
 
               return (
                 <div
                   key={conv.id}
                   onClick={() => {
-                    selectConversation(conv.id);
-                    if (window.innerWidth < 768) {
-                      setSidebarOpen(false);
-                    }
+                    dispatch(openConversation(conv.id));
+                    closeOnMobile(closeSidebar);
                   }}
+                  aria-busy={isPending}
                   className={`group relative flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs cursor-pointer transition-colors ${
+                    isPending ? "opacity-50 pointer-events-none " : ""
+                  }${
                     isActive
                       ? "bg-gray-800 text-white font-medium"
                       : "text-gray-400 hover:bg-gray-800/50 hover:text-gray-200"
@@ -237,10 +244,7 @@ export const Sidebar: React.FC = () => {
             {["dev", "alice", "bob"].map((u) => (
               <button
                 key={u}
-                onClick={() => {
-                  setDevUser(u);
-                  useConversationStore.getState().loadConversations();
-                }}
+                onClick={() => dispatch(switchDevUser(u))}
                 className={`flex-1 py-1 px-1.5 text-center text-xs rounded-md transition-colors ${
                   devUser === u
                     ? "bg-brand-600 text-white font-medium shadow"

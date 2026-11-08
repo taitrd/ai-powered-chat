@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import { ArrowUp, Square } from "lucide-react";
-import { useChatStore } from "../stores/chatStore";
-import { useUiStore } from "../stores/uiStore";
+import { useAppDispatch, useAppSelector } from "../stores/hooks";
+import { stopStreaming } from "../stores/features/chat/chatThunks";
+import { showToast } from "../stores/features/ui/uiThunks";
 
 const MAX_CHARS = 4000;
 
@@ -17,9 +18,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const [content, setContent] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const streamStatus = useChatStore((s) => s.streamStatus);
-  const stopStreaming = useChatStore((s) => s.stopStreaming);
-  const addToast = useUiStore((s) => s.addToast);
+  const dispatch = useAppDispatch();
+  const streamStatus = useAppSelector((s) => s.chat.streamStatus);
 
   const isStreaming = streamStatus === "streaming";
 
@@ -37,10 +37,12 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     if (!trimmed || isStreaming || disabled) return;
 
     if (trimmed.length > MAX_CHARS) {
-      addToast({
-        type: "error",
-        message: `Message exceeds the ${MAX_CHARS} character limit.`,
-      });
+      dispatch(
+        showToast({
+          type: "error",
+          message: `Message exceeds the ${MAX_CHARS} character limit.`,
+        })
+      );
       return;
     }
 
@@ -94,7 +96,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             {isStreaming ? (
               <button
                 type="button"
-                onClick={stopStreaming}
+                onClick={() => dispatch(stopStreaming())}
                 className="w-8 h-8 rounded-xl bg-gray-900 hover:bg-gray-800 text-white flex items-center justify-center transition-all shadow-sm active:scale-95"
                 title="Stop generation"
               >

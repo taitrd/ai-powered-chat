@@ -28,9 +28,16 @@ export interface ModelInfo {
   model: string;
 }
 
+export interface SendMessageArgs {
+  conversationId: string;
+  content: string;
+  providerId?: string;
+}
+
 export interface ToastItem {
   id: string;
   type: "info" | "success" | "error";
   message: string;
-  retry?: () => void;
+  /** Message to resend when the user presses Retry. Plain data, so Redux state stays serializable. */
+  retryMessage?: SendMessageArgs;
 }

@@ -1,9 +1,9 @@
 import React from "react";
 import { Loader2 } from "lucide-react";
-import { useUiStore } from "../stores/uiStore";
+import { useAppSelector } from "../stores/hooks";
 
 export const WakingBanner: React.FC = () => {
-  const isWakingUp = useUiStore((s) => s.isWakingUp);
+  const isWakingUp = useAppSelector((s) => s.ui.isWakingUp);
 
   if (!isWakingUp) return null;
 
