@@ -4,6 +4,14 @@ import {
   fetchConversations,
   renameConversation,
 } from "../src/services/api/conversations/conversationsApi";
+import {
+  cognitoConfirmForgotPassword,
+  cognitoConfirmSignUp,
+  cognitoForgotPassword,
+  cognitoRefreshToken,
+  cognitoSignIn,
+  cognitoSignUp,
+} from "../src/services/auth/cognito";
 import { streamChat } from "../src/services/api/messages/messagesApi";
 import { ApiError, setAccessToken, setDevUser } from "../src/services/http/client";
 
@@ -155,5 +163,97 @@ describe("streamChat", () => {
 
     expect(cb.onWaking).toHaveBeenCalledOnce();
     expect(cb.onError).toHaveBeenCalledOnce();
+  });
+});
+
+describe("cognito auth service", () => {
+  it("cognitoSignUp sends SignUp target to AWS Cognito endpoint", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({ UserSub: "sub-123", UserConfirmed: false })
+    );
+    const result = await cognitoSignUp("test@example.com", "Password123!");
+
+    const { url, init, headers } = lastRequest();
+    expect(url).toContain("cognito-idp.");
+    expect(headers["X-Amz-Target"]).toBe("AWSCognitoIdentityProviderService.SignUp");
+    expect(JSON.parse(init.body as string)).toMatchObject({
+      Username: "test@example.com",
+      Password: "Password123!",
+    });
+    expect(result.userSub).toBe("sub-123");
+  });
+
+  it("cognitoConfirmSignUp sends ConfirmSignUp target to AWS Cognito endpoint", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({}));
+    await cognitoConfirmSignUp("test@example.com", "123456");
+
+    const { headers, init } = lastRequest();
+    expect(headers["X-Amz-Target"]).toBe("AWSCognitoIdentityProviderService.ConfirmSignUp");
+    expect(JSON.parse(init.body as string)).toMatchObject({
+      Username: "test@example.com",
+      ConfirmationCode: "123456",
+    });
+  });
+
+  it("cognitoSignIn sends InitiateAuth and returns tokens", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        AuthenticationResult: {
+          AccessToken: "access-token-123",
+          IdToken: "id-token-123",
+          RefreshToken: "refresh-token-123",
+        },
+      })
+    );
+    const tokens = await cognitoSignIn("test@example.com", "Password123!");
+
+    const { headers } = lastRequest();
+    expect(headers["X-Amz-Target"]).toBe("AWSCognitoIdentityProviderService.InitiateAuth");
+    expect(tokens.accessToken).toBe("access-token-123");
+    expect(tokens.refreshToken).toBe("refresh-token-123");
+  });
+
+  it("cognitoRefreshToken sends REFRESH_TOKEN_AUTH and returns refreshed tokens", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        AuthenticationResult: {
+          AccessToken: "new-access-token",
+          IdToken: "new-id-token",
+        },
+      })
+    );
+    const tokens = await cognitoRefreshToken("saved-refresh-token");
+
+    const { headers, init } = lastRequest();
+    expect(headers["X-Amz-Target"]).toBe("AWSCognitoIdentityProviderService.InitiateAuth");
+    expect(JSON.parse(init.body as string).AuthFlow).toBe("REFRESH_TOKEN_AUTH");
+    expect(tokens.accessToken).toBe("new-access-token");
+    expect(tokens.refreshToken).toBe("saved-refresh-token");
+  });
+
+  it("cognitoForgotPassword sends ForgotPassword target", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({}));
+    await cognitoForgotPassword("test@example.com");
+
+    const { headers, init } = lastRequest();
+    expect(headers["X-Amz-Target"]).toBe("AWSCognitoIdentityProviderService.ForgotPassword");
+    expect(JSON.parse(init.body as string)).toMatchObject({
+      Username: "test@example.com",
+    });
+  });
+
+  it("cognitoConfirmForgotPassword sends ConfirmForgotPassword target", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({}));
+    await cognitoConfirmForgotPassword("test@example.com", "123456", "NewPassword123!");
+
+    const { headers, init } = lastRequest();
+    expect(headers["X-Amz-Target"]).toBe(
+      "AWSCognitoIdentityProviderService.ConfirmForgotPassword"
+    );
+    expect(JSON.parse(init.body as string)).toMatchObject({
+      Username: "test@example.com",
+      ConfirmationCode: "123456",
+      Password: "NewPassword123!",
+    });
   });
 });

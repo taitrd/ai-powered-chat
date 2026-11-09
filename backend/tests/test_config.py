@@ -13,7 +13,7 @@ def test_local_auth_is_refused_in_production():
 
 def test_cognito_auth_requires_pool_and_client():
     with pytest.raises(ValidationError, match="COGNITO_USER_POOL_ID"):
-        Settings(auth_mode="cognito")
+        Settings(auth_mode="cognito", cognito_user_pool_id="", cognito_client_id="")
 
 
 def test_production_with_cognito_is_accepted():

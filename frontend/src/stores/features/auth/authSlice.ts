@@ -1,15 +1,28 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
+import { authConfig } from "../../../lib/config/auth";
 
 export interface AuthState {
+  authMode: "local" | "cognito";
   devUser: string;
+  email: string | null;
   accessToken: string | null;
+  refreshToken: string | null;
   isAuthenticated: boolean;
+  authModalOpen: boolean;
+  status: "idle" | "loading" | "error";
+  error: string | null;
 }
 
 export const initialState: AuthState = {
+  authMode: authConfig.mode,
   devUser: "dev",
+  email: null,
   accessToken: null,
-  isAuthenticated: true, // Local development mode signs in as the dev user.
+  refreshToken: null,
+  isAuthenticated: authConfig.mode === "local",
+  authModalOpen: false,
+  status: "idle",
+  error: null,
 };
 
 const authSlice = createSlice({
@@ -19,16 +32,51 @@ const authSlice = createSlice({
     devUserSet(state, action: PayloadAction<string>) {
       state.devUser = action.payload;
     },
-    accessTokenSet(state, action: PayloadAction<string | null>) {
-      state.accessToken = action.payload;
-      state.isAuthenticated = action.payload !== null;
+    authModalToggled(state, action: PayloadAction<boolean>) {
+      state.authModalOpen = action.payload;
+      state.error = null;
+    },
+    authStatusSet(state, action: PayloadAction<"idle" | "loading" | "error">) {
+      state.status = action.payload;
+    },
+    authErrorSet(state, action: PayloadAction<string | null>) {
+      state.error = action.payload;
+      state.status = action.payload ? "error" : "idle";
+    },
+    authSuccess(
+      state,
+      action: PayloadAction<{
+        accessToken: string;
+        refreshToken?: string;
+        email: string;
+      }>,
+    ) {
+      state.accessToken = action.payload.accessToken;
+      state.refreshToken = action.payload.refreshToken || state.refreshToken;
+      state.email = action.payload.email;
+      state.isAuthenticated = true;
+      state.authModalOpen = false;
+      state.status = "idle";
+      state.error = null;
     },
     signedOut(state) {
       state.accessToken = null;
-      state.isAuthenticated = false;
+      state.refreshToken = null;
+      state.email = null;
+      state.isAuthenticated = state.authMode === "local";
+      state.status = "idle";
+      state.error = null;
     },
   },
 });
 
-export const { devUserSet, accessTokenSet, signedOut } = authSlice.actions;
+export const {
+  devUserSet,
+  authModalToggled,
+  authStatusSet,
+  authErrorSet,
+  authSuccess,
+  signedOut,
+} = authSlice.actions;
+
 export default authSlice.reducer;

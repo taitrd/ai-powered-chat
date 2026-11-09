@@ -6,7 +6,9 @@ import { MessageInput } from "./components/MessageInput";
 import { ToastContainer } from "./components/ToastContainer";
 import { WakingBanner } from "./components/WakingBanner";
 import { DemoNotice } from "./components/DemoNotice";
+import { AuthModal } from "./components/AuthModal";
 import { useAppDispatch, useAppSelector } from "./stores/hooks";
+import { initAuth } from "./stores/features/auth/authThunks";
 import { selectActiveMessages } from "./stores/features/chat/chatSlice";
 import { sendMessage } from "./stores/features/chat/chatThunks";
 import { selectActiveConversation } from "./stores/features/conversations/conversationsSlice";
@@ -14,7 +16,10 @@ import {
   createConversation,
   loadInitialData,
 } from "./stores/features/conversations/conversationsThunks";
-import { selectSelectedModel, sidebarToggled } from "./stores/features/ui/uiSlice";
+import {
+  selectSelectedModel,
+  sidebarToggled,
+} from "./stores/features/ui/uiSlice";
 
 export const App: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -22,12 +27,17 @@ export const App: React.FC = () => {
   const activeConversation = useAppSelector(selectActiveConversation);
   const messages = useAppSelector(selectActiveMessages);
   const loadingMessages = useAppSelector((s) => s.chat.loadingMessages);
+  const creatingConversation = useAppSelector((s) => s.conversations.creatingConversation);
   const selectedModelId = useAppSelector((s) => s.ui.selectedModelId);
   const activeModel = useAppSelector(selectSelectedModel);
 
   // Fetch initial data once.
   useEffect(() => {
-    dispatch(loadInitialData());
+    const init = async () => {
+      await dispatch(initAuth());
+      dispatch(loadInitialData());
+    };
+    init();
   }, [dispatch]);
 
   const handleSend = async (content: string) => {
@@ -40,7 +50,11 @@ export const App: React.FC = () => {
       }
     }
     dispatch(
-      sendMessage({ conversationId: targetId, content, providerId: selectedModelId || undefined })
+      sendMessage({
+        conversationId: targetId,
+        content,
+        providerId: selectedModelId || undefined,
+      }),
     );
   };
 
@@ -84,13 +98,14 @@ export const App: React.FC = () => {
         />
 
         {/* Input Bar */}
-        <MessageInput onSendMessage={handleSend} />
+        <MessageInput onSendMessage={handleSend} disabled={creatingConversation} />
 
         {/* Bottom Demo Notice */}
         <DemoNotice />
       </main>
 
       <ToastContainer />
+      <AuthModal />
     </div>
   );
 };

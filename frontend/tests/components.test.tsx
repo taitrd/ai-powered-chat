@@ -4,9 +4,13 @@ import { MessageInput } from "../src/components/MessageInput";
 import { ChatFeed } from "../src/components/ChatFeed";
 import { WakingBanner } from "../src/components/WakingBanner";
 import { ToastContainer } from "../src/components/ToastContainer";
+import { AuthModal } from "../src/components/AuthModal";
+import { Sidebar } from "../src/components/Sidebar";
 import { wakingUpSet } from "../src/stores/features/ui/uiSlice";
 import { showToast } from "../src/stores/features/ui/uiThunks";
+import { authModalToggled } from "../src/stores/features/auth/authSlice";
 import { renderWithStore } from "../src/test/renderWithStore";
+import type { RootState } from "../src/stores";
 
 describe("Frontend Components", () => {
   it("renders MessageInput and calls onSendMessage", () => {
@@ -68,5 +72,104 @@ describe("Frontend Components", () => {
 
     fireEvent.click(screen.getByRole("button"));
     expect(screen.queryByText("Something failed")).not.toBeInTheDocument();
+  });
+
+  it("renders AuthModal when open and allows closing", () => {
+    const { store } = renderWithStore(<AuthModal />);
+    expect(screen.queryByText(/Sign in to AI Chat/i)).not.toBeInTheDocument();
+
+    act(() => {
+      store.dispatch(authModalToggled(true));
+    });
+    expect(screen.getByText(/Sign in to AI Chat/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/you@example.com/i)).toBeInTheDocument();
+
+    // Toggle tab to Sign Up
+    fireEvent.click(screen.getByRole("button", { name: "Sign Up" }));
+    expect(screen.getByText(/Create an Account/i)).toBeInTheDocument();
+
+    // Close modal
+    fireEvent.click(screen.getByRole("button", { name: "Close" }) || screen.getAllByRole("button")[0]);
+    expect(store.getState().auth.authModalOpen).toBe(false);
+  });
+
+  it("handles forgot password navigation in AuthModal", () => {
+    const { store } = renderWithStore(<AuthModal />);
+    act(() => {
+      store.dispatch(authModalToggled(true));
+    });
+
+    // Click Forgot password?
+    fireEvent.click(screen.getByRole("button", { name: /Forgot password\?/i }));
+    expect(screen.getByText("Reset Password")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Send Reset Code" })).toBeInTheDocument();
+
+    // Click Back to Sign In
+    fireEvent.click(screen.getByRole("button", { name: /Back to Sign In/i }));
+    expect(screen.getByText(/Sign in to AI Chat/i)).toBeInTheDocument();
+  });
+
+  it("renders Sidebar in local mode with dev user switcher", () => {
+    renderWithStore(<Sidebar />, {
+      preloadedState: {
+        auth: {
+          authMode: "local",
+          devUser: "dev",
+          email: null,
+          accessToken: null,
+          refreshToken: null,
+          isAuthenticated: true,
+          authModalOpen: false,
+          status: "idle",
+          error: null,
+        },
+      },
+    });
+    expect(screen.getByText("Local Mode")).toBeInTheDocument();
+    expect(screen.getByText("dev")).toBeInTheDocument();
+    expect(screen.getByText("alice")).toBeInTheDocument();
+    expect(screen.getByText("bob")).toBeInTheDocument();
+  });
+
+  it("renders Sidebar in cognito mode with sign in button when unauthenticated", () => {
+    renderWithStore(<Sidebar />, {
+      preloadedState: {
+        auth: {
+          authMode: "cognito",
+          devUser: "dev",
+          email: null,
+          accessToken: null,
+          refreshToken: null,
+          isAuthenticated: false,
+          authModalOpen: false,
+          status: "idle",
+          error: null,
+        },
+      },
+    });
+
+    expect(screen.getByText(/Sign In \/ Register/i)).toBeInTheDocument();
+    expect(screen.queryByText("Local Mode")).not.toBeInTheDocument();
+  });
+
+  it("renders Sidebar in cognito mode with user email and sign out button when authenticated", () => {
+    renderWithStore(<Sidebar />, {
+      preloadedState: {
+        auth: {
+          authMode: "cognito",
+          devUser: "dev",
+          email: "alice@example.com",
+          accessToken: "token123",
+          refreshToken: null,
+          isAuthenticated: true,
+          authModalOpen: false,
+          status: "idle",
+          error: null,
+        },
+      },
+    });
+
+    expect(screen.getByText("alice@example.com")).toBeInTheDocument();
+    expect(screen.getByTitle("Sign Out")).toBeInTheDocument();
   });
 });

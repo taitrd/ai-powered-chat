@@ -45,6 +45,8 @@ services:
       BEDROCK_ENABLED: ${BEDROCK_ENABLED:-false}
       BEDROCK_MODEL_ID: ${BEDROCK_MODEL_ID:-anthropic.claude-haiku-5-5}
       AWS_REGION: ${AWS_REGION:-us-east-1}
+      COGNITO_USER_POOL_ID: ${COGNITO_USER_POOL_ID:-}
+      COGNITO_CLIENT_ID: ${COGNITO_CLIENT_ID:-}
       # Local stand-ins for AWS services, for features that need them.
       S3_ENDPOINT_URL: http://s3:8333
       S3_BUCKET: ${S3_BUCKET:-chat-app-local}

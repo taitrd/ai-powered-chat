@@ -3,8 +3,17 @@ import * as conversationsApi from "../src/services/api/conversations/conversatio
 import * as messagesApi from "../src/services/api/messages/messagesApi";
 import * as modelsApi from "../src/services/api/models/modelsApi";
 import * as httpClient from "../src/services/http/client";
+import * as cognitoAuth from "../src/services/auth/cognito";
 import { makeStore, type RootState } from "../src/stores";
-import { switchDevUser } from "../src/stores/features/auth/authThunks";
+import {
+  confirmForgotPassword,
+  forgotPassword,
+  initAuth,
+  signIn,
+  signOut,
+  switchDevUser,
+} from "../src/stores/features/auth/authThunks";
+import { authModalToggled } from "../src/stores/features/auth/authSlice";
 import { selectActiveMessages } from "../src/stores/features/chat/chatSlice";
 import { sendMessage, stopStreaming } from "../src/stores/features/chat/chatThunks";
 import { conversationTitleUpdated } from "../src/stores/features/conversations/conversationsSlice";
@@ -33,6 +42,14 @@ vi.mock("../src/services/http/client", () => ({
   setDevUser: vi.fn(),
   setAccessToken: vi.fn(),
 }));
+vi.mock("../src/services/auth/cognito", () => ({
+  cognitoSignIn: vi.fn(),
+  cognitoSignUp: vi.fn(),
+  cognitoConfirmSignUp: vi.fn(),
+  cognitoRefreshToken: vi.fn(),
+  cognitoForgotPassword: vi.fn(),
+  cognitoConfirmForgotPassword: vi.fn(),
+}));
 
 // One handle for all mocked service functions, to keep the tests short.
 const mockedApi = {
@@ -40,6 +57,7 @@ const mockedApi = {
   ...vi.mocked(messagesApi),
   ...vi.mocked(modelsApi),
   ...vi.mocked(httpClient),
+  ...vi.mocked(cognitoAuth),
 };
 
 function conversation(id: string, title = "New Chat"): Conversation {
@@ -249,6 +267,116 @@ describe("auth", () => {
     expect(store.getState().conversations.items).toEqual([]);
     expect(store.getState().conversations.activeId).toBeNull();
     expect(mockedApi.fetchConversations).toHaveBeenCalled();
+  });
+
+  it("handles cognito signIn flow successfully", async () => {
+    mockedApi.cognitoSignIn.mockResolvedValue({
+      accessToken: "mock-access-token",
+      idToken: "mock-id-token",
+      refreshToken: "mock-refresh-token",
+    });
+    mockedApi.fetchConversations.mockResolvedValue({ items: [], next_cursor: null });
+
+    const store = makeStore();
+    await store.dispatch(signIn("user@example.com", "Password123!"));
+
+    expect(mockedApi.cognitoSignIn).toHaveBeenCalledWith("user@example.com", "Password123!");
+    expect(mockedApi.setAccessToken).toHaveBeenCalledWith("mock-access-token");
+    expect(store.getState().auth.isAuthenticated).toBe(true);
+    expect(store.getState().auth.email).toBe("user@example.com");
+    expect(store.getState().auth.accessToken).toBe("mock-access-token");
+    expect(store.getState().auth.authModalOpen).toBe(false);
+  });
+
+  it("handles cognito signOut flow", () => {
+    const store = makeStore({
+      auth: {
+        authMode: "cognito",
+        devUser: "dev",
+        email: "user@example.com",
+        accessToken: "some-token",
+        refreshToken: "refresh-token",
+        isAuthenticated: true,
+        authModalOpen: false,
+        status: "idle",
+        error: null,
+      },
+    } as Partial<RootState>);
+
+    store.dispatch(signOut());
+
+    expect(mockedApi.setAccessToken).toHaveBeenCalledWith(null);
+    expect(store.getState().auth.isAuthenticated).toBe(false);
+    expect(store.getState().auth.email).toBeNull();
+    expect(store.getState().auth.accessToken).toBeNull();
+  });
+
+  it("toggles auth modal and clears error", () => {
+    const store = makeStore();
+    expect(store.getState().auth.authModalOpen).toBe(false);
+
+    store.dispatch(authModalToggled(true));
+    expect(store.getState().auth.authModalOpen).toBe(true);
+
+    store.dispatch(authModalToggled(false));
+    expect(store.getState().auth.authModalOpen).toBe(false);
+  });
+
+  it("initAuth restores token and refreshes when in cognito mode", async () => {
+    localStorage.setItem(
+      "chat-app-auth-tokens",
+      JSON.stringify({
+        accessToken: "old-token",
+        refreshToken: "valid-refresh",
+        email: "stored@example.com",
+      })
+    );
+    mockedApi.cognitoRefreshToken.mockResolvedValue({
+      accessToken: "new-token",
+      idToken: "new-id",
+      refreshToken: "valid-refresh",
+    });
+
+    const store = makeStore({
+      auth: {
+        authMode: "cognito",
+        devUser: "dev",
+        email: null,
+        accessToken: null,
+        refreshToken: null,
+        isAuthenticated: false,
+        authModalOpen: false,
+        status: "idle",
+        error: null,
+      },
+    } as Partial<RootState>);
+
+    await store.dispatch(initAuth());
+
+    expect(mockedApi.cognitoRefreshToken).toHaveBeenCalledWith("valid-refresh");
+    expect(store.getState().auth.accessToken).toBe("new-token");
+    expect(store.getState().auth.isAuthenticated).toBe(true);
+    expect(store.getState().auth.email).toBe("stored@example.com");
+  });
+
+  it("handles forgotPassword and confirmForgotPassword", async () => {
+    mockedApi.cognitoForgotPassword.mockResolvedValue(undefined);
+    mockedApi.cognitoConfirmForgotPassword.mockResolvedValue(undefined);
+
+    const store = makeStore();
+    const forgotOk = await store.dispatch(forgotPassword("user@example.com"));
+    expect(forgotOk).toBe(true);
+    expect(mockedApi.cognitoForgotPassword).toHaveBeenCalledWith("user@example.com");
+
+    const resetOk = await store.dispatch(
+      confirmForgotPassword("user@example.com", "123456", "NewPassword123!")
+    );
+    expect(resetOk).toBe(true);
+    expect(mockedApi.cognitoConfirmForgotPassword).toHaveBeenCalledWith(
+      "user@example.com",
+      "123456",
+      "NewPassword123!"
+    );
   });
 });
 

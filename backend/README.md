@@ -21,15 +21,18 @@ tests/            Pytest test suite (real PostgreSQL in Docker)
 
 Run from the repository root:
 
-| Command | What it does |
-| :--- | :--- |
+| Command        | What it does                                                                  |
+| :------------- | :---------------------------------------------------------------------------- |
 | `make up-core` | Start PostgreSQL and the API on `http://localhost:8000` (`/docs` for Swagger) |
-| `make test` | Run pytest against real PostgreSQL test database in Docker |
-| `make lint` | Check formatting and linting with Ruff |
-| `make migrate` | Apply latest Alembic migrations |
-| `make logs` | Follow API container logs |
+| `make test`    | Run pytest against real PostgreSQL test database in Docker                    |
+| `make lint`    | Check formatting and linting with Ruff                                        |
+| `make migrate` | Apply latest Alembic migrations                                               |
+| `make logs`    | Follow API container logs                                                     |
 
-*Local dev uses `X-Dev-User: <username>` (defaults to `dev`).*
+## Authentication
+
+- **Local mode (`AUTH_MODE=local`):** Uses `X-Dev-User: <username>` (defaults to `dev`).
+- **Cognito mode (`AUTH_MODE=cognito`):** Requires `Authorization: Bearer <access_token>` validated against AWS Cognito JWKS.
 
 ## Documentation
 

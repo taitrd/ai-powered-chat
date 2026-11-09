@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Bot, Sparkles, User as UserIcon } from "lucide-react";
+import { Bot, Loader2, Sparkles, User as UserIcon } from "lucide-react";
 import { Message } from "../types";
 import { useAppSelector } from "../stores/hooks";
 
@@ -68,6 +68,14 @@ export const ChatFeed: React.FC<ChatFeedProps> = ({
 
   return (
     <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 max-w-4xl mx-auto w-full">
+      {loading && messages.length > 0 && (
+        <div className="flex justify-center -mt-2 mb-2">
+          <span className="text-[11px] text-gray-500 bg-gray-100/90 border border-gray-200 px-2.5 py-0.5 rounded-full flex items-center gap-1.5 shadow-xs">
+            <Loader2 className="w-3 h-3 animate-spin text-brand-600" /> Updating messages...
+          </span>
+        </div>
+      )}
+
       {messages.map((msg) => {
         const isUser = msg.role === "user";
         return (
@@ -122,8 +130,12 @@ export const ChatFeed: React.FC<ChatFeedProps> = ({
                 <span className="inline-block w-1.5 h-4 ml-1 bg-brand-500 animate-pulse align-middle" />
               </div>
             ) : (
-              <div className="flex items-center gap-2 text-gray-400 py-1">
-                <span className="inline-block w-2 h-2 rounded-full bg-brand-500 animate-ping" />
+              <div className="flex items-center gap-2 text-gray-500 py-1">
+                <div className="flex gap-1 items-center">
+                  <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-bounce [animation-delay:-0.3s]" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-bounce [animation-delay:-0.15s]" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-bounce" />
+                </div>
                 <span className="text-xs font-medium">Thinking...</span>
               </div>
             )}

@@ -9,22 +9,23 @@ Coding rules for the FastAPI backend. Follow them whenever reading, adding, or m
 Every feature flows in one direction:
 **Schemas → Models & Migration → Repositories → Services → Routes → Tests**
 
-| Layer | Location | Role | Allowed | Forbidden |
-| :--- | :--- | :--- | :--- | :--- |
-| **Schemas** | `app/api/v1/schemas/` | Pydantic shapes | Input validation, constraints | Database models, SQL queries |
-| **Routes** | `app/api/v1/*.py` | Thin HTTP handlers | Request parsing, map domain errors to `HTTPException` | SQL queries, raw business rules |
-| **Services** | `app/services/`, `app/llm/` | Domain logic & AI orchestration | Business rules, calling repositories & AI adapters | FastAPI imports, `HTTPException` |
-| **Repositories** | `app/repositories/` | Data access (plain async SQL) | SQLAlchemy queries via `AsyncSession` | Business rules, HTTP concepts |
-| **Models** | `app/db/models.py` | SQLAlchemy tables | Table definitions, indexes, relations | Query logic |
-| **Settings** | `app/core/config.py` | Environment settings | Type-safe settings with defaults | Runtime state |
+| Layer            | Location                    | Role                            | Allowed                                               | Forbidden                        |
+| :--------------- | :-------------------------- | :------------------------------ | :---------------------------------------------------- | :------------------------------- |
+| **Schemas**      | `app/api/v1/schemas/`       | Pydantic shapes                 | Input validation, constraints                         | Database models, SQL queries     |
+| **Routes**       | `app/api/v1/*.py`           | Thin HTTP handlers              | Request parsing, map domain errors to `HTTPException` | SQL queries, raw business rules  |
+| **Services**     | `app/services/`, `app/llm/` | Domain logic & AI orchestration | Business rules, calling repositories & AI adapters    | FastAPI imports, `HTTPException` |
+| **Repositories** | `app/repositories/`         | Data access (plain async SQL)   | SQLAlchemy queries via `AsyncSession`                 | Business rules, HTTP concepts    |
+| **Models**       | `app/db/models.py`          | SQLAlchemy tables               | Table definitions, indexes, relations                 | Query logic                      |
+| **Settings**     | `app/core/config.py`        | Environment settings            | Type-safe settings with defaults                      | Runtime state                    |
 
 ---
 
 ## 2. Security & Database Rules
 
+- **Authentication:** In `local` mode, `get_current_user` accepts `X-Dev-User`. In `cognito` mode, it validates RS256 JWT access tokens against AWS Cognito JWKS (`token_use="access"`, issuer, client_id, expiration).
 - **User Scoping:** Every query in `repositories/` that touches user data **must** filter by `user_id`. Return `None` (routes map this to `404 Not Found`). Never return `403`, to avoid leaking existence.
 - **Authenticate Before Database:** Run auth (`get_current_user`) before database queries so invalid traffic never wakes Aurora.
-- **No Database During Streams:** Close DB sessions *before* starting LLM streams. Save assistant replies in a fresh session *before* emitting `[DONE]`.
+- **No Database During Streams:** Close DB sessions _before_ starting LLM streams. Save assistant replies in a fresh session _before_ emitting `[DONE]`.
 - **Stateless Connections:** Use single-request sessions (`Depends(get_session)`). Engine uses `NullPool`.
 - **Health Checks:** `/healthz` and `/api/v1/models` must **never** touch the database.
 
