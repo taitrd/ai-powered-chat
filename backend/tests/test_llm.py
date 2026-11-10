@@ -67,7 +67,7 @@ async def test_registry_stream_with_fallback(monkeypatch):
         registry,
         "get_active_providers",
         lambda: [
-            type("Info", (), {"id": "gemini", "model": "gemini-2.0-flash", "label": "Gemini"}),
+            type("Info", (), {"id": "gemini", "model": "gemini-3.5-flash", "label": "Gemini"}),
             type("Info", (), {"id": "fake", "model": "fake-model", "label": "Fake"}),
         ],
     )

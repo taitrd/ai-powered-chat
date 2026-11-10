@@ -57,7 +57,7 @@ class ProviderRegistry:
                 api_key = getattr(settings, item.get("api_key_env", "").lower(), "")
                 if api_key:
                     model = getattr(settings, item.get("model_env", "").lower(), "") or item.get(
-                        "default_model", "gemini-2.0-flash"
+                        "default_model", "gemini-3.5-flash"
                     )
                     active.append(
                         ProviderInfo(id=pid, label=item.get("label", "Gemini"), model=model)
