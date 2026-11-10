@@ -8,6 +8,7 @@ export interface AuthState {
   accessToken: string | null;
   refreshToken: string | null;
   isAuthenticated: boolean;
+  isInitializing: boolean;
   authModalOpen: boolean;
   status: "idle" | "loading" | "error";
   error: string | null;
@@ -20,6 +21,7 @@ export const initialState: AuthState = {
   accessToken: null,
   refreshToken: null,
   isAuthenticated: authConfig.mode === "local",
+  isInitializing: authConfig.mode === "cognito",
   authModalOpen: false,
   status: "idle",
   error: null,
@@ -35,6 +37,9 @@ const authSlice = createSlice({
     authModalToggled(state, action: PayloadAction<boolean>) {
       state.authModalOpen = action.payload;
       state.error = null;
+    },
+    authInitializingSet(state, action: PayloadAction<boolean>) {
+      state.isInitializing = action.payload;
     },
     authStatusSet(state, action: PayloadAction<"idle" | "loading" | "error">) {
       state.status = action.payload;
@@ -55,6 +60,7 @@ const authSlice = createSlice({
       state.refreshToken = action.payload.refreshToken || state.refreshToken;
       state.email = action.payload.email;
       state.isAuthenticated = true;
+      state.isInitializing = false;
       state.authModalOpen = false;
       state.status = "idle";
       state.error = null;
@@ -64,6 +70,7 @@ const authSlice = createSlice({
       state.refreshToken = null;
       state.email = null;
       state.isAuthenticated = state.authMode === "local";
+      state.isInitializing = false;
       state.status = "idle";
       state.error = null;
     },
@@ -73,6 +80,7 @@ const authSlice = createSlice({
 export const {
   devUserSet,
   authModalToggled,
+  authInitializingSet,
   authStatusSet,
   authErrorSet,
   authSuccess,

@@ -6,7 +6,6 @@ import { MessageInput } from "./components/MessageInput";
 import { ToastContainer } from "./components/ToastContainer";
 import { WakingBanner } from "./components/WakingBanner";
 import { DemoNotice } from "./components/DemoNotice";
-import { AuthModal } from "./components/AuthModal";
 import { useAppDispatch, useAppSelector } from "./stores/hooks";
 import { initAuth } from "./stores/features/auth/authThunks";
 import { selectActiveMessages } from "./stores/features/chat/chatSlice";
@@ -20,6 +19,10 @@ import {
   selectSelectedModel,
   sidebarToggled,
 } from "./stores/features/ui/uiSlice";
+
+const AuthModal = React.lazy(() =>
+  import("./components/AuthModal").then((m) => ({ default: m.AuthModal }))
+);
 
 export const App: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -105,7 +108,9 @@ export const App: React.FC = () => {
       </main>
 
       <ToastContainer />
-      <AuthModal />
+      <React.Suspense fallback={null}>
+        <AuthModal />
+      </React.Suspense>
     </div>
   );
 };

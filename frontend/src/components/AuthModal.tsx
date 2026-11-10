@@ -184,10 +184,14 @@ export const AuthModal: React.FC = () => {
                 disabled={status === "loading"}
                 className="w-full py-2.5 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-sm font-semibold shadow-sm transition-all flex items-center justify-center gap-2 disabled:opacity-75"
               >
-                {status === "loading" && (
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                {status === "loading" ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Confirming...</span>
+                  </>
+                ) : (
+                  <span>Confirm Account</span>
                 )}
-                Confirm Account
               </button>
 
               <button
@@ -231,10 +235,14 @@ export const AuthModal: React.FC = () => {
                 disabled={status === "loading"}
                 className="w-full py-2.5 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-sm font-semibold shadow-sm transition-all flex items-center justify-center gap-2 disabled:opacity-75"
               >
-                {status === "loading" && (
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                {status === "loading" ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Sending code...</span>
+                  </>
+                ) : (
+                  <span>Send Reset Code</span>
                 )}
-                Send Reset Code
               </button>
 
               <button
@@ -295,10 +303,14 @@ export const AuthModal: React.FC = () => {
                 disabled={status === "loading"}
                 className="w-full py-2.5 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-sm font-semibold shadow-sm transition-all flex items-center justify-center gap-2 disabled:opacity-75"
               >
-                {status === "loading" && (
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                {status === "loading" ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Resetting password...</span>
+                  </>
+                ) : (
+                  <span>Reset Password</span>
                 )}
-                Reset Password
               </button>
 
               <button
@@ -369,10 +381,16 @@ export const AuthModal: React.FC = () => {
                 disabled={status === "loading"}
                 className="w-full py-2.5 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-sm font-semibold shadow-sm transition-all flex items-center justify-center gap-2 disabled:opacity-75"
               >
-                {status === "loading" && (
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                {status === "loading" ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>
+                      {tab === "signin" ? "Signing in..." : "Creating account..."}
+                    </span>
+                  </>
+                ) : (
+                  <span>{tab === "signin" ? "Sign In" : "Create Account"}</span>
                 )}
-                {tab === "signin" ? "Sign In" : "Create Account"}
               </button>
             </fieldset>
           </form>

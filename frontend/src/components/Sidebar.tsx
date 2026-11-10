@@ -46,6 +46,7 @@ export const Sidebar: React.FC = () => {
 
   const authMode = useAppSelector((s) => s.auth.authMode);
   const isAuthenticated = useAppSelector((s) => s.auth.isAuthenticated);
+  const isInitializing = useAppSelector((s) => s.auth.isInitializing);
   const email = useAppSelector((s) => s.auth.email);
   const devUser = useAppSelector((s) => s.auth.devUser);
 
@@ -94,9 +95,9 @@ export const Sidebar: React.FC = () => {
       )}
 
       <aside
-        className={`fixed md:static inset-y-0 left-0 z-40 w-72 bg-gray-900 text-gray-200 flex flex-col transition-transform duration-200 ease-in-out border-r border-gray-800 ${
+        className={`fixed inset-y-0 left-0 z-40 w-72 bg-gray-900 text-gray-200 flex flex-col transition-transform duration-200 ease-in-out border-r border-gray-800 ${
           sidebarOpen
-            ? "translate-x-0"
+            ? "translate-x-0  md:static"
             : "-translate-x-full md:-translate-x-full"
         }`}
       >
@@ -308,6 +309,11 @@ export const Sidebar: React.FC = () => {
                 ))}
               </div>
             </>
+          ) : isInitializing ? (
+            <div className="flex items-center justify-center gap-2 py-2 px-3 text-xs text-gray-400 bg-gray-900 rounded-lg animate-pulse">
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-400" />
+              <span>Checking session...</span>
+            </div>
           ) : isAuthenticated ? (
             <div className="flex items-center justify-between text-xs text-gray-300 px-1">
               <span className="flex items-center gap-1.5 min-w-0 truncate font-medium">

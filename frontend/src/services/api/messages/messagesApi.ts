@@ -91,6 +91,10 @@ export async function streamChat({
         }
         try {
           const parsed = JSON.parse(payload);
+          if (parsed.error) {
+            onError(new Error(parsed.error));
+            return;
+          }
           if (parsed.delta) onDelta(parsed.delta);
         } catch {
           onDelta(payload); // Plain-text delta.

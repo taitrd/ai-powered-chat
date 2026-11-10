@@ -164,6 +164,21 @@ describe("streamChat", () => {
     expect(cb.onWaking).toHaveBeenCalledOnce();
     expect(cb.onError).toHaveBeenCalledOnce();
   });
+
+  it("reports mid-stream SSE error events to onError", async () => {
+    fetchMock.mockResolvedValue(
+      sseResponse([
+        'event: error\ndata: {"error": "All configured LLM providers failed"}\n\n',
+      ])
+    );
+    const cb = callbacks();
+
+    await streamChat({ conversationId: "c1", content: "Hi", ...cb });
+
+    expect(cb.onError).toHaveBeenCalledOnce();
+    expect(cb.onError.mock.calls[0][0].message).toBe("All configured LLM providers failed");
+    expect(cb.onEnd).not.toHaveBeenCalled();
+  });
 });
 
 describe("cognito auth service", () => {

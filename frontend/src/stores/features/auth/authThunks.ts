@@ -17,6 +17,7 @@ import { conversationsReset } from "../conversations/conversationsSlice";
 import { fetchConversations } from "../conversations/conversationsThunks";
 import {
   devUserSet,
+  authInitializingSet,
   authStatusSet,
   authErrorSet,
   authSuccess,
@@ -156,11 +157,16 @@ export const initAuth = (): AppThunk => async (dispatch, getState) => {
   const state = getState();
   if (state.auth.authMode === "local") {
     setClientDevUser(state.auth.devUser);
+    dispatch(authInitializingSet(false));
     return;
   }
 
+  dispatch(authInitializingSet(true));
   const raw = localStorage.getItem(TOKEN_STORAGE_KEY);
-  if (!raw) return;
+  if (!raw) {
+    dispatch(authInitializingSet(false));
+    return;
+  }
 
   try {
     const saved = JSON.parse(raw);
@@ -195,5 +201,7 @@ export const initAuth = (): AppThunk => async (dispatch, getState) => {
     }
   } catch {
     localStorage.removeItem(TOKEN_STORAGE_KEY);
+  } finally {
+    dispatch(authInitializingSet(false));
   }
 };
