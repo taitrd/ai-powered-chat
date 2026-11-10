@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from "react";
-import ReactMarkdown from "react-markdown";
+import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Bot, Loader2, Sparkles, User as UserIcon } from "lucide-react";
 import { Message } from "../types";
@@ -10,6 +10,20 @@ interface ChatFeedProps {
   loading: boolean;
   activeConversationTitle?: string;
 }
+
+const markdownComponents: Components = {
+  table: ({ node: _node, ...props }) => (
+    <div className="w-full my-3 overflow-x-auto rounded-lg border border-gray-200/90 shadow-2xs">
+      <table className="w-full min-w-full border-collapse text-left text-xs sm:text-sm" {...props} />
+    </div>
+  ),
+  th: ({ node: _node, ...props }) => (
+    <th className="bg-gray-50 border-b border-gray-200 px-3.5 py-2 font-semibold text-gray-700 whitespace-nowrap" {...props} />
+  ),
+  td: ({ node: _node, ...props }) => (
+    <td className="border-b border-gray-100 px-3.5 py-2 text-gray-600 align-top whitespace-normal" {...props} />
+  ),
+};
 
 export const ChatFeed: React.FC<ChatFeedProps> = ({
   messages,
@@ -60,18 +74,23 @@ export const ChatFeed: React.FC<ChatFeedProps> = ({
           {activeConversationTitle || "How can I help you today?"}
         </h2>
         <p className="text-sm text-gray-500 max-w-md">
-          Ask any question, explore ideas, or paste code. Replies are streamed in real time.
+          Ask any question, explore ideas, or paste code. Replies are streamed
+          in real time.
         </p>
       </div>
     );
   }
 
   return (
-    <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 max-w-4xl mx-auto w-full">
+    <div
+      ref={scrollRef}
+      className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 max-w-7xl mx-auto w-full"
+    >
       {loading && messages.length > 0 && (
         <div className="flex justify-center -mt-2 mb-2">
           <span className="text-[11px] text-gray-500 bg-gray-100/90 border border-gray-200 px-2.5 py-0.5 rounded-full flex items-center gap-1.5 shadow-xs">
-            <Loader2 className="w-3 h-3 animate-spin text-brand-600" /> Updating messages...
+            <Loader2 className="w-3 h-3 animate-spin text-brand-600" /> Updating
+            messages...
           </span>
         </div>
       )}
@@ -81,7 +100,7 @@ export const ChatFeed: React.FC<ChatFeedProps> = ({
         return (
           <div
             key={msg.id}
-            className={`flex items-start gap-3 ${isUser ? "flex-row-reverse" : "flex-row"}`}
+            className={`flex items-start gap-3 min-w-0 w-full ${isUser ? "flex-row-reverse" : "flex-row"}`}
           >
             {/* Avatar */}
             <div
@@ -89,12 +108,16 @@ export const ChatFeed: React.FC<ChatFeedProps> = ({
                 isUser ? "bg-gray-800" : "bg-brand-600"
               }`}
             >
-              {isUser ? <UserIcon className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
+              {isUser ? (
+                <UserIcon className="w-4 h-4" />
+              ) : (
+                <Bot className="w-4 h-4" />
+              )}
             </div>
 
             {/* Bubble */}
             <div
-              className={`max-w-[85%] md:max-w-[75%] rounded-2xl px-4 py-3 text-sm shadow-sm leading-relaxed ${
+              className={`min-w-0 max-w-[85%] md:max-w-[75%] rounded-2xl px-4 py-3 text-sm shadow-sm leading-relaxed overflow-hidden break-words ${
                 isUser
                   ? "bg-gray-900 text-white rounded-tr-sm"
                   : "bg-white text-gray-800 border border-gray-200/80 rounded-tl-sm"
@@ -103,8 +126,8 @@ export const ChatFeed: React.FC<ChatFeedProps> = ({
               {isUser ? (
                 <div className="whitespace-pre-wrap">{msg.content}</div>
               ) : (
-                <div className="prose prose-sm max-w-none text-gray-800 prose-pre:bg-gray-900 prose-pre:text-gray-100 prose-code:text-brand-700">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                <div className="prose prose-sm max-w-none text-gray-800 prose-pre:bg-gray-900 prose-pre:text-gray-100 prose-code:text-brand-700 min-w-0 overflow-hidden">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
                     {msg.content}
                   </ReactMarkdown>
                 </div>
@@ -116,15 +139,15 @@ export const ChatFeed: React.FC<ChatFeedProps> = ({
 
       {/* Streaming In-Flight Bubble */}
       {streamStatus === "streaming" && (
-        <div className="flex items-start gap-3 flex-row">
+        <div className="flex items-start gap-3 min-w-0 w-full flex-row">
           <div className="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center shrink-0 text-white text-xs shadow-sm">
             <Bot className="w-4 h-4 animate-pulse" />
           </div>
 
-          <div className="max-w-[85%] md:max-w-[75%] rounded-2xl rounded-tl-sm px-4 py-3 text-sm shadow-sm leading-relaxed bg-white text-gray-800 border border-gray-200/80">
+          <div className="min-w-0 max-w-[85%] md:max-w-[75%] rounded-2xl rounded-tl-sm px-4 py-3 text-sm shadow-sm leading-relaxed bg-white text-gray-800 border border-gray-200/80 overflow-hidden break-words">
             {streamingContent ? (
-              <div className="prose prose-sm max-w-none text-gray-800 prose-pre:bg-gray-900 prose-pre:text-gray-100">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              <div className="prose prose-sm max-w-none text-gray-800 prose-pre:bg-gray-900 prose-pre:text-gray-100 min-w-0 overflow-hidden">
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
                   {streamingContent}
                 </ReactMarkdown>
                 <span className="inline-block w-1.5 h-4 ml-1 bg-brand-500 animate-pulse align-middle" />

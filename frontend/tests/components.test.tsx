@@ -25,6 +25,35 @@ describe("Frontend Components", () => {
     expect(handleSend).toHaveBeenCalledWith("Hello AI");
   });
 
+  it("populates message input when clicking a quick prompt helper button", () => {
+    const handleSend = vi.fn();
+    renderWithStore(<MessageInput onSendMessage={handleSend} />);
+
+    const tablePromptBtn = screen.getByRole("button", { name: "Prompt: Markdown Table" });
+    fireEvent.click(tablePromptBtn);
+
+    const textarea = screen.getByPlaceholderText(/Type your message/i) as HTMLTextAreaElement;
+    expect(textarea.value).toContain("Compare Gemini, Claude, and ChatGPT in a detailed Markdown table");
+  });
+
+  it("inserts markdown formatting when toggling and clicking toolbar formatting buttons", async () => {
+    const handleSend = vi.fn();
+    renderWithStore(<MessageInput onSendMessage={handleSend} />);
+
+    // Format toolbar is hidden by default
+    expect(screen.queryByTitle("Format Bold (**text**)")).not.toBeInTheDocument();
+
+    // Toggle format toolbar open
+    const toggleBtn = screen.getByTitle(/Toggle Markdown/i);
+    fireEvent.click(toggleBtn);
+
+    const boldBtn = await screen.findByTitle("Format Bold (**text**)");
+    fireEvent.click(boldBtn);
+
+    const textarea = screen.getByPlaceholderText(/Type your message/i) as HTMLTextAreaElement;
+    expect(textarea.value).toBe("**bold text**");
+  });
+
   it("shows a toast instead of sending an over-long message", () => {
     const handleSend = vi.fn();
     const { store } = renderWithStore(<MessageInput onSendMessage={handleSend} />);
@@ -51,6 +80,20 @@ describe("Frontend Components", () => {
     renderWithStore(<ChatFeed messages={messages} loading={false} />);
     expect(screen.getByText("What is 2+2?")).toBeInTheDocument();
     expect(screen.getByText("2+2 is 4")).toBeInTheDocument();
+  });
+
+  it("renders assistant messages with rich react-markdown", () => {
+    const markdownContent =
+      "# Heading 1\n\n| Col 1 | Col 2 |\n|---|---|\n| Val 1 | Val 2 |\n\n```python\nprint('hello')\n```";
+    const messages = [
+      { id: "1", role: "assistant" as const, content: markdownContent, created_at: "" },
+    ];
+    renderWithStore(<ChatFeed messages={messages} loading={false} />);
+
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Heading 1");
+    expect(screen.getByRole("table")).toBeInTheDocument();
+    expect(screen.getByText("Val 1")).toBeInTheDocument();
+    expect(screen.getByText(/print\('hello'\)/)).toBeInTheDocument();
   });
 
   it("shows WakingBanner only while the API is waking up", () => {
@@ -171,5 +214,50 @@ describe("Frontend Components", () => {
 
     expect(screen.getByText("alice@example.com")).toBeInTheDocument();
     expect(screen.getByTitle("Sign Out")).toBeInTheDocument();
+  });
+
+  it("renders Sidebar in cognito mode with checking session loading state while initializing", () => {
+    renderWithStore(<Sidebar />, {
+      preloadedState: {
+        auth: {
+          authMode: "cognito",
+          devUser: "dev",
+          email: null,
+          accessToken: null,
+          refreshToken: null,
+          isAuthenticated: false,
+          isInitializing: true,
+          authModalOpen: false,
+          status: "idle",
+          error: null,
+        },
+      },
+    });
+
+    expect(screen.getByText(/Checking session.../i)).toBeInTheDocument();
+    expect(screen.queryByText(/Sign In \/ Register/i)).not.toBeInTheDocument();
+  });
+
+  it("renders AuthModal with loading states when submitting", () => {
+    renderWithStore(<AuthModal />, {
+      preloadedState: {
+        auth: {
+          authMode: "cognito",
+          devUser: "dev",
+          email: null,
+          accessToken: null,
+          refreshToken: null,
+          isAuthenticated: false,
+          isInitializing: false,
+          authModalOpen: true,
+          status: "loading",
+          error: null,
+        },
+      },
+    });
+
+    expect(screen.getByText("Signing in...")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/you@example.com/i)).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Close" })).toBeDisabled();
   });
 });
