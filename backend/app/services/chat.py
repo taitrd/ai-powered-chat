@@ -39,10 +39,22 @@ async def prepare_user_turn(
     await check_daily_limits(session, conversation.user_id)
 
     # 3. Add user message
+    effective_pid = provider_id or conversation.provider_id or get_settings().llm_default
+    model_name = None
+    try:
+        registry = get_registry()
+        _, resolved_pid, resolved_model = registry.get_provider(effective_pid)
+        effective_pid = resolved_pid
+        model_name = resolved_model
+    except Exception:
+        pass
+
     user_msg = Message(
         conversation_id=conversation.id,
         role="user",
         content=clean_content,
+        provider=effective_pid,
+        model=model_name,
     )
     session.add(user_msg)
 
@@ -51,8 +63,8 @@ async def prepare_user_turn(
         conversation.title = generate_title(clean_content)
 
     conversation.updated_at = func.now()
-    if provider_id:
-        conversation.provider_id = provider_id
+    if provider_id or not conversation.provider_id:
+        conversation.provider_id = effective_pid
 
     await session.commit()
 
