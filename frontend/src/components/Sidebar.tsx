@@ -80,6 +80,10 @@ export const Sidebar: React.FC = () => {
   };
 
   const handleNewChat = async () => {
+    if (authMode === "cognito" && !isAuthenticated) {
+      dispatch(authModalToggled(true));
+      return;
+    }
     const result = await dispatch(createConversation());
     if (createConversation.fulfilled.match(result)) closeOnMobile(closeSidebar);
   };
@@ -206,6 +210,10 @@ export const Sidebar: React.FC = () => {
                 <div
                   key={conv.id}
                   onClick={() => {
+                    if (authMode === "cognito" && !isAuthenticated) {
+                      dispatch(authModalToggled(true));
+                      return;
+                    }
                     dispatch(openConversation(conv.id));
                     closeOnMobile(closeSidebar);
                   }}
