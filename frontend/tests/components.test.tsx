@@ -54,6 +54,14 @@ describe("Frontend Components", () => {
     expect(textarea.value).toBe("**bold text**");
   });
 
+  it("hides quick prompts and format toolbar in production mode (showDevHelpers=false)", () => {
+    const handleSend = vi.fn();
+    renderWithStore(<MessageInput onSendMessage={handleSend} showDevHelpers={false} />);
+
+    expect(screen.queryByRole("button", { name: /Prompt:/i })).not.toBeInTheDocument();
+    expect(screen.queryByTitle(/Toggle Markdown/i)).not.toBeInTheDocument();
+  });
+
   it("shows a toast instead of sending an over-long message", () => {
     const handleSend = vi.fn();
     const { store } = renderWithStore(<MessageInput onSendMessage={handleSend} />);

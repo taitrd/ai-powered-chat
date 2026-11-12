@@ -3,6 +3,7 @@ import { ArrowUp, Square } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "../stores/hooks";
 import { stopStreaming } from "../stores/features/chat/chatThunks";
 import { showToast } from "../stores/features/ui/uiThunks";
+import { authConfig } from "../lib/config/auth";
 import { QuickPromptsBar } from "./QuickPromptsBar";
 
 const MarkdownToolbar = lazy(() => import("./MarkdownToolbar"));
@@ -12,15 +13,20 @@ const MAX_CHARS = 4000;
 interface MessageInputProps {
   onSendMessage: (content: string) => void;
   disabled?: boolean;
+  showDevHelpers?: boolean;
 }
 
 export const MessageInput: React.FC<MessageInputProps> = ({
   onSendMessage,
   disabled = false,
+  showDevHelpers,
 }) => {
   const [content, setContent] = useState("");
   const [showMarkdown, setShowMarkdown] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const isDev = showDevHelpers ?? (import.meta.env.DEV || authConfig.mode === "local");
+  const showToolbar = isDev && showMarkdown;
 
   const dispatch = useAppDispatch();
   const streamStatus = useAppSelector((s) => s.chat.streamStatus);
@@ -105,22 +111,24 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   return (
     <div className="p-4 md:p-6 bg-gradient-to-t from-gray-50 via-gray-50 to-transparent">
       <div className="max-w-4xl mx-auto w-full relative space-y-2">
-        {/* Quick Prompts Helper Toolbar */}
-        <QuickPromptsBar
-          onSelectPrompt={handleSelectPrompt}
-          showMarkdown={showMarkdown}
-          onToggleMarkdown={() => setShowMarkdown((prev) => !prev)}
-          disabled={disabled || isStreaming}
-        />
+        {/* Quick Prompts Helper Toolbar (only in local / dev) */}
+        {isDev && (
+          <QuickPromptsBar
+            onSelectPrompt={handleSelectPrompt}
+            showMarkdown={showMarkdown}
+            onToggleMarkdown={() => setShowMarkdown((prev) => !prev)}
+            disabled={disabled || isStreaming}
+          />
+        )}
 
-        {/* Input Form (Restores previous layout by default, optional format toolbar when toggled) */}
+        {/* Input Form (Restores previous layout by default, optional format toolbar when toggled in dev) */}
         <form
           onSubmit={handleSubmit}
           className={`relative bg-white border border-gray-300/80 rounded-2xl shadow-sm focus-within:ring-2 focus-within:ring-brand-500/20 focus-within:border-brand-500 transition-all ${
-            showMarkdown ? "flex flex-col overflow-hidden" : "flex items-end p-2.5"
+            showToolbar ? "flex flex-col overflow-hidden" : "flex items-end p-2.5"
           }`}
         >
-          {showMarkdown && (
+          {showToolbar && (
             <Suspense
               fallback={
                 <div className="h-8 bg-gray-50/50 border-b border-gray-100 animate-pulse" />
@@ -133,7 +141,11 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             </Suspense>
           )}
 
-          <div className={showMarkdown ? "flex items-end p-2.5 pt-1.5" : "flex items-end w-full"}>
+          <div
+            className={
+              showToolbar ? "flex items-end p-2.5 pt-1.5" : "flex items-end w-full"
+            }
+          >
             <textarea
               ref={textareaRef}
               rows={1}
