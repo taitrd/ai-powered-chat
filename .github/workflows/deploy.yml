@@ -107,17 +107,39 @@ jobs:
     permissions:
       id-token: write # Required for AWS OIDC authentication
       contents: read
+    # Vite bakes VITE_* values into the JavaScript at build time, so every frontend
+    # build in this job (npm run build and npm run sync-frontend) needs them.
+    # Set them under Settings -> Secrets and variables -> Actions -> Variables.
+    # They're public (they ship in the bundle), so never put secrets in VITE_*.
+    env:
+      VITE_AUTH_MODE: ${{ vars.VITE_AUTH_MODE || 'cognito' }}
+      VITE_COGNITO_USER_POOL_ID: ${{ vars.VITE_COGNITO_USER_POOL_ID }}
+      VITE_COGNITO_CLIENT_ID: ${{ vars.VITE_COGNITO_CLIENT_ID }}
+      VITE_AWS_REGION: ${{ vars.VITE_AWS_REGION || vars.AWS_REGION || 'us-east-1' }}
+      VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL || '/api/v1' }}
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Validate AWS Role Configuration
+      - name: Validate Deploy Configuration
         run: |
+          missing=0
           if [ -z "${{ secrets.AWS_ROLE_ARN || vars.AWS_ROLE_ARN }}" ]; then
-            echo "::error::AWS_ROLE_ARN is missing! Add AWS_ROLE_ARN under GitHub Settings -> Secrets and variables -> Actions (as either a Secret or a Variable)."
-            exit 1
+            echo "::error::AWS_ROLE_ARN is missing. Add it under Settings -> Secrets and variables -> Actions (as a Secret or a Variable)."
+            missing=1
           fi
+          if [ "$VITE_AUTH_MODE" != "cognito" ]; then
+            echo "::error::VITE_AUTH_MODE is '$VITE_AUTH_MODE'. Production must use 'cognito', because the backend only accepts Cognito tokens."
+            missing=1
+          fi
+          # The browser signs in with the app client ID and region; the pool ID is optional.
+          if [ -z "$VITE_COGNITO_CLIENT_ID" ]; then
+            echo "::error::VITE_COGNITO_CLIENT_ID is missing. Add it as an Actions Variable (ChatAuth stack output UserPoolClientId)."
+            missing=1
+          fi
+          [ "$missing" -eq 0 ] || exit 1
+          echo "Frontend build config: auth=$VITE_AUTH_MODE region=$VITE_AWS_REGION pool=$VITE_COGNITO_USER_POOL_ID api=$VITE_API_BASE_URL"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4

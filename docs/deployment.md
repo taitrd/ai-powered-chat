@@ -166,6 +166,12 @@ Visit the frontend URL in your browser, register an account, and send a test mes
 2. In GitHub repository **Settings → Secrets and variables → Actions → Variables**, add:
    - `AWS_ROLE_ARN`: the role ARN from `ChatCicd` output (e.g. `arn:aws:iam::141058755356:role/chat-app-github-deploy-role`)
    - `AWS_REGION`: `us-east-1`
+   - `VITE_AUTH_MODE`: `cognito`, which is also the default if unset
+   - `VITE_COGNITO_CLIENT_ID`: the `UserPoolClientId` output of `ChatAuth` (**required**)
+   - `VITE_COGNITO_USER_POOL_ID`: the `UserPoolId` output of `ChatAuth` (optional, not used by the browser today)
+   - `VITE_AWS_REGION` and `VITE_API_BASE_URL`: optional, defaulting to `AWS_REGION` and `/api/v1`
+
+   Vite builds these into the public JavaScript, so they must not contain secrets. The deploy job stops with a clear error if `VITE_COGNITO_CLIENT_ID` is missing or `VITE_AUTH_MODE` isn't `cognito`.
 3. Workflows:
    - **Pull requests (`test.yml`)**: Runs Ruff lint, Pytest with PostgreSQL service container, frontend build/tests, and CDK synth.
    - **Pushes to `main` (`deploy.yml`)**: Authenticates via AWS OIDC (no stored AWS keys), builds the production frontend SPA, deploys all CDK stacks, and smoke tests the live health URL.
