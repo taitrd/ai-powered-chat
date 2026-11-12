@@ -16,6 +16,9 @@ from app.llm.registry import get_registry
 from app.repositories import messages as messages_repo
 from app.services.limits import check_daily_limits, validate_message_length
 
+# Send an SSE comment when the provider is quiet this long, so proxies keep the stream open.
+HEARTBEAT_SECONDS = 15.0
+
 
 def generate_title(content: str) -> str:
     """Generate conversation title from the first message (up to 60 chars)."""
@@ -70,10 +73,7 @@ async def prepare_user_turn(
 
     # 5. Load context messages (up to 40)
     history = await messages_repo.get_recent_history(session, conversation.id, limit=40)
-    chat_context = [
-        ChatMessage(role=m.role, content=m.content)
-        for m in history
-    ]
+    chat_context = [ChatMessage(role=m.role, content=m.content) for m in history]
 
     return user_msg, chat_context
 
@@ -90,25 +90,37 @@ async def stream_chat_reply(
     full_reply_chunks: list[str] = []
     final_pid: str | None = None
     final_model: str | None = None
+    stop_reason: str | None = None
+
+    stream_iter = registry.stream_with_fallback(
+        chat_context,
+        provider_id=provider_id,
+        max_tokens=settings.max_output_tokens,
+    ).__aiter__()
+
+    async def next_event():
+        return await stream_iter.__anext__()
+
+    # One read is in flight at a time. On a heartbeat timeout we keep waiting on the
+    # same read: cancelling it (as asyncio.wait_for does) would end the provider's
+    # stream and silently drop the rest of the reply.
+    pending: asyncio.Task | None = None
 
     try:
-        stream_iter = registry.stream_with_fallback(
-            chat_context,
-            provider_id=provider_id,
-            max_tokens=settings.max_output_tokens,
-        ).__aiter__()
-
         while True:
-            try:
-                item = await asyncio.wait_for(stream_iter.__anext__(), timeout=15.0)
-            except TimeoutError:
-                # Heartbeat comment to keep connections alive
-                yield ": ping\n\n"
+            if pending is None:
+                pending = asyncio.ensure_future(next_event())
+            done, _ = await asyncio.wait({pending}, timeout=HEARTBEAT_SECONDS)
+            if not done:
+                yield ": ping\n\n"  # Heartbeat comment keeps proxies from closing the stream.
                 continue
+
+            finished, pending = pending, None
+            try:
+                event, pid, model = finished.result()
             except StopAsyncIteration:
                 break
 
-            event, pid, model = item
             final_pid = pid
             final_model = model
 
@@ -117,11 +129,20 @@ async def stream_chat_reply(
                 data = json.dumps({"delta": event.delta})
                 yield f"data: {data}\n\n"
             elif isinstance(event, StreamEnd):
-                data = json.dumps({"stop_reason": event.stop_reason or "end_turn"})
+                stop_reason = event.stop_reason or "end_turn"
+                data = json.dumps({"stop_reason": stop_reason})
                 yield f"data: {data}\n\n"
 
-        # Save assistant message before sending [DONE]
         full_text = "".join(full_reply_chunks)
+        if not full_text:
+            # Finishing without text (for example, the whole token budget went to thinking,
+            # or the provider returned nothing) must not look like success to the user.
+            raise LLMError(
+                f"The AI provider returned an empty reply (stop reason: {stop_reason or 'none'}). "
+                "Please try again."
+            )
+
+        # Save assistant message before sending [DONE]
         if full_text:
             async with get_sessionmaker()() as save_session:
                 asst_msg = Message(
@@ -142,3 +163,13 @@ async def stream_chat_reply(
     except (RateLimited, Unavailable, LLMError, Exception) as exc:
         err_data = json.dumps({"error": str(exc)})
         yield f"event: error\ndata: {err_data}\n\n"
+    finally:
+        # Client disconnected or an error occurred: stop the in-flight provider read.
+        if pending is not None and not pending.done():
+            pending.cancel()
+        aclose = getattr(stream_iter, "aclose", None)
+        if aclose is not None:
+            try:
+                await aclose()
+            except Exception:
+                pass
