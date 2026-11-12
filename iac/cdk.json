@@ -25,6 +25,7 @@
     "githubOwnerId": "16987286",
     "githubRepoId": "1452139011",
     "awakeCapHours": 3,
-    "dataApiOperatorUser": "iac-sdk-deployer"
+    "dataApiOperatorUser": "iac-sdk-deployer",
+    "dbDriver": "dataapi"
   }
 }
