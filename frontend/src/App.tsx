@@ -8,6 +8,7 @@ import { WakingBanner } from "./components/WakingBanner";
 import { DemoNotice } from "./components/DemoNotice";
 import { useAppDispatch, useAppSelector } from "./stores/hooks";
 import { initAuth } from "./stores/features/auth/authThunks";
+import { authModalToggled } from "./stores/features/auth/authSlice";
 import { selectActiveMessages } from "./stores/features/chat/chatSlice";
 import { sendMessage } from "./stores/features/chat/chatThunks";
 import { selectActiveConversation } from "./stores/features/conversations/conversationsSlice";
@@ -33,6 +34,8 @@ export const App: React.FC = () => {
   const creatingConversation = useAppSelector((s) => s.conversations.creatingConversation);
   const selectedModelId = useAppSelector((s) => s.ui.selectedModelId);
   const activeModel = useAppSelector(selectSelectedModel);
+  const authMode = useAppSelector((s) => s.auth.authMode);
+  const isAuthenticated = useAppSelector((s) => s.auth.isAuthenticated);
 
   // Fetch initial data once.
   useEffect(() => {
@@ -44,6 +47,10 @@ export const App: React.FC = () => {
   }, [dispatch]);
 
   const handleSend = async (content: string) => {
+    if (authMode === "cognito" && !isAuthenticated) {
+      dispatch(authModalToggled(true));
+      return;
+    }
     let targetId = activeId;
     if (!targetId) {
       try {
