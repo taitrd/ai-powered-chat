@@ -4,7 +4,7 @@ import type { AppThunk } from "../../index";
 import { createAppAsyncThunk, errorMessage } from "../../hooks";
 import { conversationTitleUpdated } from "../conversations/conversationsSlice";
 import { wakingUpSet } from "../ui/uiSlice";
-import { showToast } from "../ui/uiThunks";
+import { fetchServiceStatus, isDailyLimitError, showToast } from "../ui/uiThunks";
 import {
   messageAdded,
   streamDelta,
@@ -102,6 +102,11 @@ export const sendMessage = createAppAsyncThunk(
       onError: (error) => {
         if (superseded()) return;
         dispatch(streamFailed(conversationId));
+        if (isDailyLimitError(error)) {
+          dispatch(fetchServiceStatus()); // Show the paused banner; retrying won't help today.
+          dispatch(showToast({ type: "error", message: errorMessage(error, "Daily limit reached.") }));
+          return;
+        }
         dispatch(
           showToast({
             type: "error",

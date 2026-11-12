@@ -9,6 +9,8 @@ export class ApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    /** Machine-readable reason from the backend, e.g. "daily_limit". */
+    readonly code?: string,
   ) {
     super(message);
     this.name = "ApiError";
@@ -51,8 +53,10 @@ export async function parseError(
   fallback: string,
 ): Promise<ApiError> {
   let message = fallback;
+  let code: string | undefined;
   try {
     const body = await response.json();
+    if (typeof body?.code === "string") code = body.code;
     if (typeof body?.detail === "string") {
       message = body.detail;
     } else if (Array.isArray(body?.detail) && body.detail[0]?.msg) {
@@ -61,7 +65,7 @@ export async function parseError(
   } catch {
     // Body wasn't JSON: keep the fallback message.
   }
-  return new ApiError(message, response.status);
+  return new ApiError(message, response.status, code);
 }
 
 // --- Requests ----------------------------------------------------------------

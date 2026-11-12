@@ -2,13 +2,23 @@
 
 import os
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.v1.router import api_router as api_v1_router
 from app.core.config import get_settings
+from app.core.pause import (
+    DAILY_LIMIT_CODE,
+    PAUSED_MESSAGE,
+    is_paused,
+    resumes_at,
+    seconds_until_resume,
+)
+
+# Paths that never touch the database, so they keep working while the demo is paused.
+ALWAYS_AVAILABLE = ("/api/v1/status", "/api/v1/models")
 
 
 def create_app() -> FastAPI:
@@ -23,6 +33,24 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.middleware("http")
+    async def daily_pause(request: Request, call_next):
+        # While paused, refuse chat API calls before any database access, so Aurora
+        # can stay asleep. The website itself and cached chats still load.
+        path = request.url.path
+        if path.startswith("/api/") and not path.startswith(ALWAYS_AVAILABLE):
+            if await is_paused():
+                return JSONResponse(
+                    status_code=503,
+                    content={
+                        "detail": PAUSED_MESSAGE,
+                        "code": DAILY_LIMIT_CODE,
+                        "resumes_at": resumes_at().isoformat(),
+                    },
+                    headers={"Retry-After": str(seconds_until_resume())},
+                )
+        return await call_next(request)
 
     app.include_router(api_v1_router, prefix="/api/v1")
 

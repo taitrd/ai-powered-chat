@@ -5,6 +5,13 @@ export interface User {
   created_at?: string;
 }
 
+export interface ServiceStatus {
+  paused: boolean;
+  /** ISO time when the demo is back (next midnight UTC), when paused. */
+  resumes_at: string | null;
+  message: string | null;
+}
+
 export interface Conversation {
   id: string;
   title: string;

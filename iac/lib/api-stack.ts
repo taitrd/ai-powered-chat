@@ -5,6 +5,7 @@ import * as events from "aws-cdk-lib/aws-events";
 import * as targets from "aws-cdk-lib/aws-events-targets";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as lambda from "aws-cdk-lib/aws-lambda";
+import * as ssm from "aws-cdk-lib/aws-ssm";
 import { Construct } from "constructs";
 
 export interface ApiStackProps extends cdk.StackProps {
@@ -110,6 +111,15 @@ export class ApiStack extends cdk.Stack {
     );
 
     // Awake Guard Lambda to cap Aurora compute costs
+    // Pause switch: "true" once Aurora's daily awake cap is reached. The app then serves
+    // the site with a friendly message instead of chat calls. Only the guard writes it.
+    const pauseSwitch = new ssm.StringParameter(this, "PauseSwitch", {
+      parameterName: "/chat-app/prod/paused",
+      stringValue: "false",
+      description: "Set to true by the awake guard when the daily Aurora awake cap is reached",
+    });
+    this.apiFunction.addEnvironment("PAUSE_PARAMETER_NAME", pauseSwitch.parameterName);
+
     const awakeGuardFn = new lambda.Function(this, "AwakeGuardFunction", {
       runtime: lambda.Runtime.PYTHON_3_12,
       handler: "awake-guard.handler",
@@ -120,6 +130,7 @@ export class ApiStack extends cdk.Stack {
         API_FUNCTION_NAME: this.apiFunction.functionName,
         CLUSTER_IDENTIFIER: props.clusterIdentifier,
         AWAKE_CAP_HOURS: awakeCap.toString(),
+        PAUSE_PARAMETER_NAME: pauseSwitch.parameterName,
       },
       description: "Daily awake cap guard to enforce Aurora idle pauses",
     });
@@ -131,12 +142,12 @@ export class ApiStack extends cdk.Stack {
         resources: ["*"],
       })
     );
+    pauseSwitch.grantRead(awakeGuardFn);
+    pauseSwitch.grantWrite(awakeGuardFn);
+    // Only to remove a 0 limit left by the previous guard; it can no longer set one.
     awakeGuardFn.addToRolePolicy(
       new iam.PolicyStatement({
-        actions: [
-          "lambda:PutFunctionConcurrency",
-          "lambda:DeleteFunctionConcurrency",
-        ],
+        actions: ["lambda:DeleteFunctionConcurrency"],
         resources: [this.apiFunction.functionArn],
       })
     );

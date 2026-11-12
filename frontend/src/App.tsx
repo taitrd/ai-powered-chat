@@ -5,6 +5,7 @@ import { ChatFeed } from "./components/ChatFeed";
 import { MessageInput } from "./components/MessageInput";
 import { ToastContainer } from "./components/ToastContainer";
 import { WakingBanner } from "./components/WakingBanner";
+import { PausedBanner } from "./components/PausedBanner";
 import { DemoNotice } from "./components/DemoNotice";
 import { useAppDispatch, useAppSelector } from "./stores/hooks";
 import { initAuth } from "./stores/features/auth/authThunks";
@@ -27,6 +28,7 @@ const AuthModal = React.lazy(() =>
 
 export const App: React.FC = () => {
   const dispatch = useAppDispatch();
+  const isPaused = useAppSelector((s) => s.ui.pausedUntil !== null);
   const activeId = useAppSelector((s) => s.conversations.activeId);
   const activeConversation = useAppSelector(selectActiveConversation);
   const messages = useAppSelector(selectActiveMessages);
@@ -74,6 +76,7 @@ export const App: React.FC = () => {
 
       {/* Main chat column */}
       <main className="flex-1 flex flex-col h-full overflow-hidden min-w-0">
+        <PausedBanner />
         <WakingBanner />
 
         {/* Top Navbar */}
@@ -108,7 +111,7 @@ export const App: React.FC = () => {
         />
 
         {/* Input Bar */}
-        <MessageInput onSendMessage={handleSend} disabled={creatingConversation} />
+        <MessageInput onSendMessage={handleSend} disabled={creatingConversation || isPaused} />
 
         {/* Bottom Demo Notice */}
         <DemoNotice />

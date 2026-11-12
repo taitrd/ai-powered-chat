@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     # Tests and local checks only: emulate the Data API against this PostgreSQL DSN.
     data_api_fake_dsn: str = ""
 
+    # SSM parameter set to "true" by the awake guard when the daily cap is reached.
+    pause_parameter_name: str = ""
+
     cognito_user_pool_id: str = ""
     cognito_client_id: str = ""
     aws_region: str = "us-east-1"

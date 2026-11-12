@@ -3,7 +3,7 @@ import type { Conversation } from "../../../types";
 import type { AppThunk } from "../../index";
 import { createAppAsyncThunk, errorMessage } from "../../hooks";
 import { fetchMessages } from "../chat/chatThunks";
-import { fetchModels, showToast } from "../ui/uiThunks";
+import { fetchModels, fetchServiceStatus, isDailyLimitError, showToast } from "../ui/uiThunks";
 import { conversationSelected } from "./conversationsSlice";
 
 export const fetchConversations = createAppAsyncThunk(
@@ -13,6 +13,7 @@ export const fetchConversations = createAppAsyncThunk(
       return await conversationsApi.fetchConversations();
     } catch (error) {
       const message = errorMessage(error, "Couldn't load conversations.");
+      if (isDailyLimitError(error)) dispatch(fetchServiceStatus()); // Show the paused banner.
       dispatch(showToast({ type: "error", message }));
       return rejectWithValue(message);
     }
@@ -73,6 +74,10 @@ export const openConversation =
 export const loadInitialData =
   (): AppThunk<Promise<void>> => async (dispatch, getState) => {
     dispatch(fetchModels());
+    // While the demo is paused for the day, keep showing cached chats and don't call
+    // the chat API (it would only return "daily limit reached").
+    const status = await dispatch(fetchServiceStatus());
+    if (fetchServiceStatus.fulfilled.match(status) && status.payload.paused) return;
     const { authMode, isAuthenticated } = getState().auth;
     if (authMode === "local" || isAuthenticated) {
       await dispatch(fetchConversations());

@@ -210,6 +210,17 @@ jobs:
           cd iac
           npx cdk deploy --all --require-approval never
 
+      # Apply the daily-cap state now instead of waiting up to 15 minutes for the schedule.
+      - name: Run Awake Guard Once
+        run: |
+          guard=$(aws cloudformation describe-stack-resources --stack-name ChatApi \
+            --query "StackResources[?ResourceType=='AWS::Lambda::Function' && starts_with(LogicalResourceId, 'AwakeGuard')].PhysicalResourceId" \
+            --output text)
+          aws lambda invoke --function-name "$guard" --log-type Tail /tmp/guard.json \
+            --query LogResult --output text | base64 -d | grep -v -E "^(START|END|REPORT)"
+          cat /tmp/guard.json; echo
+          if grep -q FunctionError /tmp/guard.json; then exit 1; fi
+
       - name: Smoke Test Live URL
         run: |
           echo "Verifying health endpoint at https://aichat.taitrd.com/healthz..."

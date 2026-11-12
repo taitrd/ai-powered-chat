@@ -1,7 +1,7 @@
 import { createSlice, nanoid, type PayloadAction } from "@reduxjs/toolkit";
 import type { ModelInfo, ToastItem } from "../../../types";
 import type { RootState } from "../../index";
-import { fetchModels } from "./uiThunks";
+import { fetchModels, fetchServiceStatus } from "./uiThunks";
 
 export interface UiState {
   sidebarOpen: boolean;
@@ -10,6 +10,8 @@ export interface UiState {
   loadingModels: boolean;
   selectedModelId: string;
   toasts: ToastItem[];
+  /** Set while the demo is paused for the day: when it's back (ISO time). */
+  pausedUntil: string | null;
 }
 
 export const initialState: UiState = {
@@ -19,6 +21,7 @@ export const initialState: UiState = {
   loadingModels: false,
   selectedModelId: "",
   toasts: [],
+  pausedUntil: null,
 };
 
 const uiSlice = createSlice({
@@ -64,6 +67,9 @@ const uiSlice = createSlice({
       })
       .addCase(fetchModels.rejected, (state) => {
         state.loadingModels = false;
+      })
+      .addCase(fetchServiceStatus.fulfilled, (state, action) => {
+        state.pausedUntil = action.payload.paused ? action.payload.resumes_at : null;
       });
   },
 });

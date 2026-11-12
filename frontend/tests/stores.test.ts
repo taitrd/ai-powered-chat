@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as conversationsApi from "../src/services/api/conversations/conversationsApi";
 import * as messagesApi from "../src/services/api/messages/messagesApi";
 import * as modelsApi from "../src/services/api/models/modelsApi";
+import * as statusApi from "../src/services/api/status/statusApi";
 import * as httpClient from "../src/services/http/client";
+import { ApiError } from "../src/services/http/client";
 import * as cognitoAuth from "../src/services/auth/cognito";
 import { makeStore, type RootState } from "../src/stores";
 import {
@@ -26,9 +28,10 @@ import {
   createConversation,
   deleteConversation,
   fetchConversations,
+  loadInitialData,
 } from "../src/stores/features/conversations/conversationsThunks";
 import { sidebarToggled, toastRemoved } from "../src/stores/features/ui/uiSlice";
-import { fetchModels, showToast } from "../src/stores/features/ui/uiThunks";
+import { fetchModels, fetchServiceStatus, showToast } from "../src/stores/features/ui/uiThunks";
 import { loadPersistedState, startPersistence } from "../src/stores/persistence";
 import type { Conversation } from "../src/types";
 
@@ -43,7 +46,10 @@ vi.mock("../src/services/api/messages/messagesApi", () => ({
   streamChat: vi.fn(),
 }));
 vi.mock("../src/services/api/models/modelsApi", () => ({ fetchModels: vi.fn() }));
-vi.mock("../src/services/http/client", () => ({
+vi.mock("../src/services/api/status/statusApi", () => ({ fetchServiceStatus: vi.fn() }));
+// Keep the real module (e.g. ApiError for instanceof checks); stub only the credential setters.
+vi.mock("../src/services/http/client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/services/http/client")>()),
   setDevUser: vi.fn(),
   setAccessToken: vi.fn(),
 }));
@@ -61,6 +67,7 @@ const mockedApi = {
   ...vi.mocked(conversationsApi),
   ...vi.mocked(messagesApi),
   ...vi.mocked(modelsApi),
+  ...vi.mocked(statusApi),
   ...vi.mocked(httpClient),
   ...vi.mocked(cognitoAuth),
 };
@@ -473,5 +480,62 @@ describe("browser cache", () => {
   it("ignores a corrupt cache", () => {
     localStorage.setItem("chat-app-cache-v1", "{not json");
     expect(loadPersistedState()).toBeUndefined();
+  });
+});
+
+
+describe("daily pause", () => {
+  const RESUMES = "2026-11-13T00:00:00+00:00";
+
+  it("status sets and clears the paused state", async () => {
+    const store = makeStore();
+    mockedApi.fetchServiceStatus.mockResolvedValue({ paused: true, resumes_at: RESUMES, message: "x" });
+    await store.dispatch(fetchServiceStatus());
+    expect(store.getState().ui.pausedUntil).toBe(RESUMES);
+
+    mockedApi.fetchServiceStatus.mockResolvedValue({ paused: false, resumes_at: null, message: null });
+    await store.dispatch(fetchServiceStatus());
+    expect(store.getState().ui.pausedUntil).toBeNull();
+  });
+
+  it("initial load keeps cached chats and skips the chat API while paused", async () => {
+    mockedApi.fetchModels.mockResolvedValue([]);
+    mockedApi.fetchServiceStatus.mockResolvedValue({ paused: true, resumes_at: RESUMES, message: "x" });
+    const store = storeWithConversations([conversation("cached", "Cached chat")], "cached");
+
+    await store.dispatch(loadInitialData());
+
+    expect(mockedApi.fetchConversations).not.toHaveBeenCalled();
+    expect(mockedApi.fetchMessages).not.toHaveBeenCalled();
+    expect(store.getState().conversations.items[0].title).toBe("Cached chat");
+    expect(store.getState().ui.pausedUntil).toBe(RESUMES);
+  });
+
+  it("initial load works normally when not paused", async () => {
+    mockedApi.fetchModels.mockResolvedValue([]);
+    mockedApi.fetchServiceStatus.mockResolvedValue({ paused: false, resumes_at: null, message: null });
+    mockedApi.fetchConversations.mockResolvedValue({ items: [], next_cursor: null });
+    const base = makeStore().getState();
+    const store = makeStore({ auth: { ...base.auth, isAuthenticated: true } }); // signed in
+
+    await store.dispatch(loadInitialData());
+
+    expect(mockedApi.fetchConversations).toHaveBeenCalled();
+    expect(store.getState().ui.pausedUntil).toBeNull();
+  });
+
+  it("a daily-limit error while sending shows the banner instead of a retry", async () => {
+    mockedApi.fetchServiceStatus.mockResolvedValue({ paused: true, resumes_at: RESUMES, message: "x" });
+    mockedApi.streamChat.mockImplementation(async ({ onError }) => {
+      onError(new ApiError("The demo has reached its daily limit", 503, "daily_limit"));
+    });
+    const store = storeWithConversations([conversation("c1")], "c1");
+
+    await store.dispatch(sendMessage({ conversationId: "c1", content: "Hi" }));
+    await vi.waitFor(() => expect(store.getState().ui.pausedUntil).toBe(RESUMES));
+
+    const [toast] = store.getState().ui.toasts;
+    expect(toast.message).toMatch(/daily limit/);
+    expect(toast.retryMessage).toBeUndefined();
   });
 });

@@ -335,3 +335,24 @@ describe("Frontend Components", () => {
     expect(store.getState().chat.byConversation).toEqual({});
   });
 });
+
+
+describe("PausedBanner", () => {
+  it("is hidden normally and shows the local resume time while paused", async () => {
+    const { PausedBanner } = await import("../src/components/PausedBanner");
+    const { initialState } = await import("../src/stores/features/ui/uiSlice");
+    const resumes = "2026-11-13T00:00:00+00:00";
+
+    const { unmount } = renderWithStore(<PausedBanner />);
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    unmount();
+
+    renderWithStore(<PausedBanner />, {
+      preloadedState: { ui: { ...initialState, pausedUntil: resumes } },
+    });
+    const banner = screen.getByRole("status");
+    expect(banner).toHaveTextContent(/resting for today/i);
+    const expectedTime = new Date(resumes).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    expect(banner).toHaveTextContent(expectedTime);
+  });
+});
