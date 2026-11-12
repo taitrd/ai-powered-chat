@@ -10,6 +10,7 @@ __pycache__/
 **/.venv
 .pytest_cache/
 .ruff_cache/
+backend/static/
 
 # Node
 node_modules/
@@ -18,6 +19,10 @@ coverage/
 
 # CDK
 cdk.out/
+**/cdk.out/
+iac/**/*.js
+iac/**/*.d.ts
+iac/node_modules/
 
 # OS and editors
 .DS_Store
