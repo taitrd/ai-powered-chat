@@ -50,7 +50,9 @@ const awakeCapHours = Number(app.node.tryGetContext("awakeCapHours") || 3);
 const authStack = new AuthStack(app, "ChatAuth", { env });
 
 // 2. Data stack (Aurora Serverless PostgreSQL)
-const dataStack = new DataStack(app, "ChatData", { env });
+const dataApiOperatorUser =
+  (app.node.tryGetContext("dataApiOperatorUser") as string) || undefined;
+const dataStack = new DataStack(app, "ChatData", { env, dataApiOperatorUser });
 
 // 3. API stack (FastAPI on Lambda with Lambda Web Adapter & Awake Guard)
 const apiStack = new ApiStack(app, "ChatApi", {
@@ -59,6 +61,9 @@ const apiStack = new ApiStack(app, "ChatApi", {
   userPoolClientId: authStack.userPoolClient.userPoolClientId,
   clusterEndpoint: dataStack.cluster.clusterEndpoint.hostname,
   clusterIdentifier: dataStack.cluster.clusterIdentifier,
+  clusterArn: dataStack.cluster.clusterArn,
+  dataApiSecretArn: dataStack.dataApiSecret.secretArn,
+  dbDriver: app.node.tryGetContext("dbDriver") === "dataapi" ? "dataapi" : "asyncpg",
   awakeCapHours,
 });
 apiStack.addStackDependency(authStack);

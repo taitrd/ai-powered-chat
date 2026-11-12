@@ -44,6 +44,15 @@ def do_run_migrations(connection: Connection) -> None:
 
 async def run_migrations_online() -> None:
     settings = get_settings()
+    if settings.db_driver == "dataapi":
+        # Through the RDS Data API (HTTPS), the same engine the app uses.
+        from app.db.session import get_engine
+
+        async with get_engine().connect() as connection:
+            await connection.run_sync(do_run_migrations)
+            await connection.commit()
+        return
+
     url = database_url()
     connect_args = {}
     if "rds.amazonaws.com" in url or "ssl=" in url or settings.app_env == "prod":

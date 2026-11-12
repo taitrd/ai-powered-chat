@@ -27,12 +27,28 @@ from app.main import app  # noqa: E402
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
 
+# DB_DRIVER=dataapi runs the suite through the RDS Data API: against the fake
+# (DATA_API_FAKE_DSN) or a real Aurora scratch database (DATA_API_DATABASE).
+USE_DATA_API = os.environ.get("DB_DRIVER") == "dataapi"
+if USE_DATA_API and not os.environ.get("DATA_API_FAKE_DSN"):
+    # The setup below drops the whole schema. Never point it at the real app database.
+    assert (
+        os.environ.get("DATA_API_DATABASE", "chat") != "chat"
+    ), "Set DATA_API_DATABASE to a scratch database: tests wipe the schema"
+
+
 async def _reset_schema() -> None:
-    engine = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
+    if USE_DATA_API:
+        from app.db.session import get_engine
+
+        engine = get_engine()
+    else:
+        engine = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
     async with engine.begin() as conn:
         await conn.execute(text("DROP SCHEMA public CASCADE"))
         await conn.execute(text("CREATE SCHEMA public"))
-    await engine.dispose()
+    if not USE_DATA_API:
+        await engine.dispose()
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -41,7 +57,8 @@ def migrated_database() -> None:
     asyncio.run(_reset_schema())
     config = Config(str(BACKEND_DIR / "alembic.ini"))
     config.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
-    config.set_main_option("sqlalchemy.url", TEST_DATABASE_URL)
+    if not USE_DATA_API:
+        config.set_main_option("sqlalchemy.url", TEST_DATABASE_URL)
     command.upgrade(config, "head")
 
 

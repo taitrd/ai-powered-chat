@@ -45,9 +45,32 @@ def get_cached_iam_token(host: str, port: int, user: str, region: str) -> str:
     return token
 
 
+def _data_api_engine() -> AsyncEngine:
+    """Engine that sends SQL through the RDS Data API (see app/db/dataapi)."""
+    import app.db.dataapi  # noqa: F401  Registers the postgresql+dataapi dialect.
+
+    settings = get_settings()
+    if settings.data_api_fake_dsn:
+        from app.db.dataapi.fake import FakeDataApiClient
+
+        client = FakeDataApiClient(settings.data_api_fake_dsn)
+    else:
+        from app.db.dataapi.client import BotoDataApiClient
+
+        client = BotoDataApiClient(
+            resource_arn=settings.data_api_resource_arn,
+            secret_arn=settings.data_api_secret_arn,
+            database=settings.data_api_database,
+            region=settings.aws_region,
+        )
+    return create_async_engine("postgresql+dataapi://", connect_args={"client": client})
+
+
 @lru_cache
 def get_engine() -> AsyncEngine:
     settings = get_settings()
+    if settings.db_driver == "dataapi":
+        return _data_api_engine()
     connect_args = {}
     if (
         "rds.amazonaws.com" in settings.database_url

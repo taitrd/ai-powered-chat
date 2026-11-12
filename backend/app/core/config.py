@@ -20,6 +20,15 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://chat:chat@localhost:5432/chat"
     db_auth_mode: Literal["password", "iam"] = "password"
 
+    # "asyncpg" connects directly. "dataapi" uses the RDS Data API over HTTPS (proof of
+    # concept), so Aurora can stay in private subnets with no public IP.
+    db_driver: Literal["asyncpg", "dataapi"] = "asyncpg"
+    data_api_resource_arn: str = ""  # Aurora cluster ARN
+    data_api_secret_arn: str = ""  # Secrets Manager ARN of the database user
+    data_api_database: str = "chat"
+    # Tests and local checks only: emulate the Data API against this PostgreSQL DSN.
+    data_api_fake_dsn: str = ""
+
     cognito_user_pool_id: str = ""
     cognito_client_id: str = ""
     aws_region: str = "us-east-1"
@@ -48,6 +57,13 @@ class Settings(BaseSettings):
             raise ValueError(
                 "AUTH_MODE=cognito requires COGNITO_USER_POOL_ID and COGNITO_CLIENT_ID"
             )
+        if self.db_driver == "dataapi" and not self.data_api_fake_dsn:
+            if not (self.data_api_resource_arn and self.data_api_secret_arn):
+                raise ValueError(
+                    "DB_DRIVER=dataapi requires DATA_API_RESOURCE_ARN and DATA_API_SECRET_ARN"
+                )
+        if self.app_env == "prod" and self.data_api_fake_dsn:
+            raise ValueError("DATA_API_FAKE_DSN is for tests only and not allowed in prod")
         return self
 
 
