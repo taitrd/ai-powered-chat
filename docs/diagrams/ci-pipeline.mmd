@@ -1,7 +1,17 @@
-flowchart LR
-    PR[Pull request] --> T[Lint, type-check, test, cdk synth]
-    Main[Push to main] --> T2[Same checks]
-    T2 --> M[Run Alembic migrations]
-    M --> B[Build frontend]
-    B --> D["cdk deploy --all<br/>builds image, updates Lambda and S3"]
-    D --> S[Smoke test the live URL]
+flowchart TD
+    subgraph PR["Pull Request (test.yml)"]
+        direction TB
+        PR_Trigger[PR to main] --> PR_Gates{Parallel Quality Gates}
+        PR_Gates --> T_Back["Backend: Ruff lint & Pytest<br/>(Postgres service container)"]
+        PR_Gates --> T_Front["Frontend: Typecheck & Vitest"]
+        PR_Gates --> T_IaC["IaC: TypeScript compile & CDK synth"]
+    end
+
+    subgraph Main["Push to Main (deploy.yml)"]
+        direction TB
+        Main_Trigger[Merge/Push to main] --> Main_Test[Run Quality Gates]
+        Main_Test --> OIDC["AWS OIDC Authentication<br/>(sts:AssumeRoleWithWebIdentity)"]
+        OIDC --> Build["Build React SPA & Sync<br/>(npm run sync-frontend)"]
+        Build --> Deploy["CDK Deploy<br/>(Builds Lambda container & updates HTTP API)"]
+        Deploy --> Smoke["Smoke Test Health Endpoint<br/>(curl https://aichat.taitrd.com/healthz)"]
+    end

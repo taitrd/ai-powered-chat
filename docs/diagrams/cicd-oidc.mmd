@@ -1,0 +1,15 @@
+sequenceDiagram
+    autonumber
+    participant GA as GitHub Actions Runner
+    participant GH as GitHub OIDC Token Service<br/>(token.actions.githubusercontent.com)
+    participant STS as AWS STS<br/>(sts:AssumeRoleWithWebIdentity)
+    participant IAM as AWS IAM Role<br/>(chat-app-github-deploy-role)
+    participant CDK as AWS CDK / CloudFormation
+
+    GA->>GH: 1. Request signed OIDC JWT token (repo claims)
+    GH-->>GA: 2. Return signed JWT (aud=sts.amazonaws.com, sub=repo:owner/repo:*)
+    GA->>STS: 3. Call AssumeRoleWithWebIdentity(RoleArn, WebIdentityToken)
+    STS->>GH: 4. Verify cryptographic signature & thumbprint
+    STS->>IAM: 5. Validate Trust Policy (aud == sts.amazonaws.com AND sub == repo:owner/repo:*)
+    STS-->>GA: 6. Issue temporary AWS credentials (1-hour session)
+    GA->>CDK: 7. Run CDK deploy with temporary credentials
