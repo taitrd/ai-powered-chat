@@ -99,7 +99,11 @@ jobs:
   deploy:
     name: Deploy to AWS
     needs: [test-backend, test-frontend]
-    runs-on: ubuntu-latest
+    # The Lambda image is ARM64 (Graviton). Building it on an x86 runner fails with
+    # "exec format error" during RUN steps, so build on a native ARM runner instead.
+    # (Free for public repos. For a private repo without ARM runners, use ubuntu-latest
+    # and add docker/setup-qemu-action@v3 before Buildx, which is slower.)
+    runs-on: ubuntu-24.04-arm
     permissions:
       id-token: write # Required for AWS OIDC authentication
       contents: read
