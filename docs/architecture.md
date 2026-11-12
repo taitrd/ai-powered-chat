@@ -45,7 +45,7 @@
 | API Gateway to Lambda  | HTTPS proxy to the streaming Lambda Function URL                                                                                                          |
 | Every API request      | Cognito JWT checked before any database access                                                                                                            |
 | User data              | Every query is filtered by the signed-in user. Another user's chat returns `404`.                                                                         |
-| Lambda to Aurora       | Short-lived IAM tokens over TLS, with no stored password. The database endpoint is internet-reachable, so it relies on IAM rather than a private network. |
+| Lambda to Aurora       | RDS Data API over HTTPS, signed with the Lambda's IAM role. The database has no public IP or open ports, and Lambda can read only the `app_data` secret. |
 | Secrets                | AI keys are kept in SSM Parameter Store, never in code or images                                                                                          |
 | GitHub to AWS          | OIDC role limited to this repository's `main` branch, with no stored AWS keys                                                                             |
 | Cost                   | Message limits, a daily cap on database awake time, and a budget alert                                                                                    |

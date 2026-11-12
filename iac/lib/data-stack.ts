@@ -25,7 +25,9 @@ export class DataStack extends cdk.Stack {
     super(scope, id, props);
 
     // Minimal VPC with 0 NAT gateways to avoid idle costs (~$32/mo saved).
-    // Public subnets allow Aurora's internet access gateway without NAT Gateways.
+    // The subnets are "public" for historical reasons, but the database has no public IP
+    // and no inbound rules: the app reaches it only through the RDS Data API (HTTPS).
+    // Changing the subnets would replace the cluster, so they stay as they are.
     this.vpc = new ec2.Vpc(this, "ChatVpc", {
       maxAzs: 2,
       natGateways: 0,
@@ -39,15 +41,11 @@ export class DataStack extends cdk.Stack {
 
     this.securityGroup = new ec2.SecurityGroup(this, "DbSecurityGroup", {
       vpc: this.vpc,
+      // Keep this description: changing it would replace the security group.
+      // There are no inbound rules; the app uses the RDS Data API instead.
       description: "Allow inbound PostgreSQL access to Aurora",
       allowAllOutbound: true,
     });
-
-    this.securityGroup.addIngressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(5432),
-      "Allow PostgreSQL port 5432 (protected by IAM authentication)",
-    );
 
     this.cluster = new rds.DatabaseCluster(this, "AuroraCluster", {
       engine: rds.DatabaseClusterEngine.auroraPostgres({
@@ -56,7 +54,8 @@ export class DataStack extends cdk.Stack {
       serverlessV2MinCapacity: 0,
       serverlessV2MaxCapacity: 1,
       writer: rds.ClusterInstance.serverlessV2("writer", {
-        publiclyAccessible: true,
+        // No public IPv4 (saves ~$3.65/month) and no internet exposure.
+        publiclyAccessible: false,
       }),
       vpc: this.vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },

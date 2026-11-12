@@ -6,7 +6,7 @@ flowchart LR
         APIGW -->|HTTP_PROXY| URL[Lambda Function URL<br/>response streaming]
         URL --> Lambda[Lambda Container<br/>FastAPI + Web Adapter]
         Lambda -->|Serves SPA & assets| Static[Static files<br/>index.html, JS/CSS]
-        Lambda -->|IAM login, TLS| Aurora[(Aurora PostgreSQL<br/>pauses when idle)]
+        Lambda -->|RDS Data API, HTTPS| Aurora[(Aurora PostgreSQL<br/>private, pauses when idle)]
         Guard[Awake guard<br/>every 15 min] -.->|Pauses API above daily cap| Lambda
     end
 

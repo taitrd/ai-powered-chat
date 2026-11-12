@@ -174,6 +174,37 @@ jobs:
           cd iac
           npm run build
 
+      # The database must be ready before the new app version goes live, so deploy the
+      # data stacks first, then prepare the database, then deploy everything else.
+      - name: Deploy Auth & Data Stacks
+        run: |
+          cd iac
+          npx cdk deploy ChatAuth ChatData --require-approval never
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: "backend/requirements.txt"
+
+      # Aurora is private: both steps run through the RDS Data API (HTTPS) with this
+      # job's AWS role, signed in as the admin user (it owns the tables). Both are safe
+      # to repeat, and migrations must stay backward compatible with the running app.
+      - name: Prepare Database (app user + migrations)
+        working-directory: backend
+        run: |
+          pip install -r requirements.txt
+          output() {
+            aws cloudformation describe-stacks --stack-name ChatData \
+              --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text
+          }
+          python -m scripts.setup_data_api_user \
+            --cluster-arn "$(output ClusterArn)" \
+            --admin-secret-arn "$(output AdminSecretArn)" \
+            --user-secret-arn "$(output DataApiSecretArn)"
+          ./scripts/migrate.sh prod
+
       - name: Deploy CDK Stacks
         run: |
           cd iac
