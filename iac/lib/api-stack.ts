@@ -53,6 +53,9 @@ export class ApiStack extends cdk.Stack {
         AWS_LWA_INVOKE_MODE: "response_stream",
         AWS_LWA_READ_TIMEOUT_MS: "300000",
         LLM_DEFAULT: "gemini",
+        // AI keys are read from SSM SecureStrings under this path at startup
+        // (set with backend/scripts/set-ssm.sh), never stored in the Lambda config.
+        SECRETS_SSM_PATH: "/chat-app/prod/",
       },
       description: "FastAPI Chat backend with Lambda Web Adapter",
     });

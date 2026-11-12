@@ -72,4 +72,7 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
+    from app.core.secrets import load_ssm_secrets
+
+    load_ssm_secrets()  # Production: AI keys from SSM (no-op unless SECRETS_SSM_PATH is set).
     return Settings()
