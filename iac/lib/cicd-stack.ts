@@ -32,7 +32,10 @@ export class CicdStack extends cdk.Stack {
             "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
           },
           StringLike: {
-            "token.actions.githubusercontent.com:sub": `repo:${props.githubRepo}:*`,
+            "token.actions.githubusercontent.com:sub": [
+              `repo:${props.githubRepo}:*`,
+              `repo:${props.githubRepo.toLowerCase()}:*`,
+            ],
           },
         },
         "sts:AssumeRoleWithWebIdentity",

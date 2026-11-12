@@ -100,10 +100,20 @@ jobs:
     name: Deploy to AWS
     needs: [test-backend, test-frontend]
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write # Required for AWS OIDC authentication
+      contents: read
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+
+      - name: Validate AWS Role Configuration
+        run: |
+          if [ -z "${{ secrets.AWS_ROLE_ARN || vars.AWS_ROLE_ARN }}" ]; then
+            echo "::error::AWS_ROLE_ARN is missing! Add AWS_ROLE_ARN under GitHub Settings -> Secrets and variables -> Actions (as either a Secret or a Variable)."
+            exit 1
+          fi
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -118,8 +128,8 @@ jobs:
       - name: Configure AWS Credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN || vars.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION || vars.AWS_REGION || 'us-east-1' }}
 
       - name: Install Frontend Dependencies & Build
         run: |
