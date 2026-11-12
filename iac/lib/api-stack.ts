@@ -14,6 +14,11 @@ export interface ApiStackProps extends cdk.StackProps {
   clusterIdentifier: string;
   clusterResourceIdentifier?: string;
   awakeCapHours?: number;
+  /** Aurora cluster ARN and app_data secret ARN, for the RDS Data API. */
+  clusterArn: string;
+  dataApiSecretArn: string;
+  /** "asyncpg" connects directly with IAM tokens; "dataapi" uses the RDS Data API. */
+  dbDriver?: "asyncpg" | "dataapi";
 }
 
 export class ApiStack extends cdk.Stack {
@@ -40,6 +45,10 @@ export class ApiStack extends cdk.Stack {
         COGNITO_CLIENT_ID: props.userPoolClientId,
         DATABASE_URL: `postgresql+asyncpg://app@${props.clusterEndpoint}:5432/chat`,
         DB_AUTH_MODE: "iam",
+        DB_DRIVER: props.dbDriver ?? "asyncpg",
+        DATA_API_RESOURCE_ARN: props.clusterArn,
+        DATA_API_SECRET_ARN: props.dataApiSecretArn,
+        DATA_API_DATABASE: "chat",
         AWS_LWA_INVOKE_MODE: "response_stream",
         AWS_LWA_READ_TIMEOUT_MS: "300000",
         LLM_DEFAULT: "gemini",
@@ -52,6 +61,26 @@ export class ApiStack extends cdk.Stack {
       authType: lambda.FunctionUrlAuthType.NONE,
       invokeMode: lambda.InvokeMode.RESPONSE_STREAM,
     });
+
+    // IAM Permissions: RDS Data API (SQL over HTTPS) as the app_data user only.
+    this.apiFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: [
+          "rds-data:ExecuteStatement",
+          "rds-data:BatchExecuteStatement",
+          "rds-data:BeginTransaction",
+          "rds-data:CommitTransaction",
+          "rds-data:RollbackTransaction",
+        ],
+        resources: [props.clusterArn],
+      })
+    );
+    this.apiFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["secretsmanager:GetSecretValue"],
+        resources: [props.dataApiSecretArn],
+      })
+    );
 
     // IAM Permissions: RDS IAM DB connect
     const rdsResourceArn = `arn:aws:rds-db:${this.region}:${this.account}:dbuser:*/app`;

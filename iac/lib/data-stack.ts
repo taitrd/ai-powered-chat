@@ -1,14 +1,27 @@
 import * as cdk from "aws-cdk-lib";
 import * as ec2 from "aws-cdk-lib/aws-ec2";
+import * as iam from "aws-cdk-lib/aws-iam";
 import * as rds from "aws-cdk-lib/aws-rds";
+import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import { Construct } from "constructs";
+
+export interface DataStackProps extends cdk.StackProps {
+  /**
+   * IAM user allowed to run one-off SQL through the Data API (setup scripts, live checks):
+   * Data API calls on this cluster, plus reading the admin and app_data secrets.
+   * Leave unset to remove the access.
+   */
+  dataApiOperatorUser?: string;
+}
 
 export class DataStack extends cdk.Stack {
   public readonly cluster: rds.DatabaseCluster;
   public readonly vpc: ec2.Vpc;
   public readonly securityGroup: ec2.SecurityGroup;
+  /** Password login for the Data API user `app_data` (the Data API can't use IAM tokens). */
+  public readonly dataApiSecret: secretsmanager.Secret;
 
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+  constructor(scope: Construct, id: string, props?: DataStackProps) {
     super(scope, id, props);
 
     // Minimal VPC with 0 NAT gateways to avoid idle costs (~$32/mo saved).
@@ -50,11 +63,67 @@ export class DataStack extends cdk.Stack {
       securityGroups: [this.securityGroup],
       defaultDatabaseName: "chat",
       iamAuthentication: true,
+      // RDS Data API: SQL over HTTPS, so the app needs no network path to the database.
+      enableDataApi: true,
       backup: {
         retention: cdk.Duration.days(7),
       },
       deletionProtection: true,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
+    });
+
+    // Credentials for the `app_data` database user. Data API logins use a Secrets Manager
+    // secret with username and password; the role itself is created with SQL
+    // (backend/scripts/init-data-api-user.sql). No punctuation keeps the SQL quoting simple.
+    this.dataApiSecret = new secretsmanager.Secret(this, "DataApiUserSecret", {
+      secretName: "chat-app/db/app_data",
+      description: "Aurora login for the RDS Data API user app_data",
+      generateSecretString: {
+        secretStringTemplate: JSON.stringify({ username: "app_data" }),
+        generateStringKey: "password",
+        excludePunctuation: true,
+        passwordLength: 40,
+      },
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+    });
+
+    if (props?.dataApiOperatorUser) {
+      // A managed policy, not an inline one: IAM caps a user's inline policies at 2,048 bytes.
+      new iam.ManagedPolicy(this, "DataApiOperatorPolicy", {
+        description: "One-off SQL through the RDS Data API (setup scripts, live checks)",
+        users: [iam.User.fromUserName(this, "DataApiOperator", props.dataApiOperatorUser)],
+        statements: [
+          new iam.PolicyStatement({
+            actions: [
+              "rds-data:ExecuteStatement",
+              "rds-data:BatchExecuteStatement",
+              "rds-data:BeginTransaction",
+              "rds-data:CommitTransaction",
+              "rds-data:RollbackTransaction",
+            ],
+            resources: [this.cluster.clusterArn],
+          }),
+          new iam.PolicyStatement({
+            actions: ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"],
+            resources: [this.cluster.secret!.secretArn, this.dataApiSecret.secretArn],
+          }),
+        ],
+      });
+    }
+
+    new cdk.CfnOutput(this, "ClusterArn", {
+      value: this.cluster.clusterArn,
+      description: "Aurora cluster ARN (DATA_API_RESOURCE_ARN)",
+    });
+
+    new cdk.CfnOutput(this, "DataApiSecretArn", {
+      value: this.dataApiSecret.secretArn,
+      description: "Secret for the app_data user (DATA_API_SECRET_ARN)",
+    });
+
+    new cdk.CfnOutput(this, "AdminSecretArn", {
+      value: this.cluster.secret!.secretArn,
+      description: "Admin (postgres) secret, for one-off setup through the Data API",
     });
 
     new cdk.CfnOutput(this, "ClusterEndpoint", {

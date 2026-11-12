@@ -24,6 +24,7 @@
     "githubRepo": "taitrd/ai-powered-chat",
     "githubOwnerId": "16987286",
     "githubRepoId": "1452139011",
-    "awakeCapHours": 3
+    "awakeCapHours": 3,
+    "dataApiOperatorUser": "iac-sdk-deployer"
   }
 }
