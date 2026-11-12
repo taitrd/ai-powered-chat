@@ -6,6 +6,7 @@ import { WakingBanner } from "../src/components/WakingBanner";
 import { ToastContainer } from "../src/components/ToastContainer";
 import { AuthModal } from "../src/components/AuthModal";
 import { Sidebar } from "../src/components/Sidebar";
+import { App } from "../src/App";
 import { wakingUpSet } from "../src/stores/features/ui/uiSlice";
 import { showToast } from "../src/stores/features/ui/uiThunks";
 import { authModalToggled } from "../src/stores/features/auth/authSlice";
@@ -267,5 +268,70 @@ describe("Frontend Components", () => {
     expect(screen.getByText("Signing in...")).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/you@example.com/i)).toBeDisabled();
     expect(screen.getByRole("button", { name: "Close" })).toBeDisabled();
+  });
+
+  it("renders privacy notice and link in MessageInput", () => {
+    const handleSend = vi.fn();
+    renderWithStore(<MessageInput onSendMessage={handleSend} />);
+
+    expect(
+      screen.getByText(/chats aren't used to improve our models\. Gemini is AI and can make mistakes\./i)
+    ).toBeInTheDocument();
+
+    const privacyLink = screen.getByRole("link", { name: "Your privacy & Gemini" });
+    expect(privacyLink).toBeInTheDocument();
+    expect(privacyLink).toHaveAttribute("href", "https://support.google.com/gemini/answer/13594961");
+    expect(privacyLink).toHaveAttribute("target", "_blank");
+  });
+
+  it("guards New Chat in Sidebar by opening AuthModal when unauthenticated in cognito mode", () => {
+    const { store } = renderWithStore(<Sidebar />, {
+      preloadedState: {
+        auth: {
+          authMode: "cognito",
+          devUser: "dev",
+          email: null,
+          accessToken: null,
+          refreshToken: null,
+          isAuthenticated: false,
+          isInitializing: false,
+          authModalOpen: false,
+          status: "idle",
+          error: null,
+        },
+      },
+    });
+
+    const newChatBtn = screen.getByRole("button", { name: /New Chat/i });
+    fireEvent.click(newChatBtn);
+
+    expect(store.getState().auth.authModalOpen).toBe(true);
+  });
+
+  it("guards Enter/Send in App by opening AuthModal when unauthenticated in cognito mode", () => {
+    const { store } = renderWithStore(<App />, {
+      preloadedState: {
+        auth: {
+          authMode: "cognito",
+          devUser: "dev",
+          email: null,
+          accessToken: null,
+          refreshToken: null,
+          isAuthenticated: false,
+          isInitializing: false,
+          authModalOpen: false,
+          status: "idle",
+          error: null,
+        },
+      },
+    });
+
+    const textarea = screen.getByPlaceholderText(/Type your message/i);
+    fireEvent.change(textarea, { target: { value: "Hello world" } });
+    fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
+
+    expect(store.getState().auth.authModalOpen).toBe(true);
+    // Message should not be sent
+    expect(store.getState().chat.byConversation).toEqual({});
   });
 });
