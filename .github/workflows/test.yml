@@ -1,0 +1,122 @@
+name: Tests & Validation
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-backend:
+    name: Backend Tests & Lint
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: chat
+          POSTGRES_PASSWORD: chat
+          POSTGRES_DB: chat_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: "backend/requirements*.txt"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt -r backend/requirements-dev.txt
+
+      - name: Run Ruff Linter
+        run: |
+          cd backend
+          ruff check .
+
+      - name: Run Pytest
+        env:
+          DATABASE_URL: postgresql+asyncpg://chat:chat@localhost:5432/chat_test
+          TEST_DATABASE_URL: postgresql+asyncpg://chat:chat@localhost:5432/chat_test
+          APP_ENV: test
+          AUTH_MODE: local
+          DB_AUTH_MODE: password
+          LLM_DEFAULT: fake
+        run: |
+          cd backend
+          pytest
+
+  test-frontend:
+    name: Frontend Tests & Typecheck
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: "frontend/package-lock.json"
+
+      - name: Install Dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Typecheck and Build Frontend
+        run: |
+          cd frontend
+          npm run build
+
+      - name: Run Vitest
+        run: |
+          cd frontend
+          npm test
+
+  test-iac:
+    name: IaC Synth & Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: "iac/package-lock.json"
+
+      - name: Install IaC Dependencies
+        run: |
+          cd iac
+          npm ci
+
+      - name: Compile TypeScript
+        run: |
+          cd iac
+          npm run build
+
+      - name: Synthesize CloudFormation Templates
+        run: |
+          cd iac
+          npx cdk synth
