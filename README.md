@@ -25,7 +25,7 @@ A small AI chat app with saved conversations, user accounts and streaming replie
 | Backend | Python, FastAPI, running on AWS Lambda |
 | Database | Aurora PostgreSQL Serverless, which pauses when idle |
 | Auth | Amazon Cognito |
-| Hosting | S3 and CloudFront, with Route 53 and ACM for the domain and HTTPS |
+| Hosting | API Gateway HTTP API, with Route 53 and ACM for custom domain and HTTPS |
 | IaC and CI/CD | AWS CDK (TypeScript), GitHub Actions |
 
 ## Documentation

@@ -1,10 +1,11 @@
 flowchart LR
-    Browser([Browser]) -->|HTTPS| CF[CloudFront<br/>custom domain]
-    Browser -.->|Sign in| Cognito[Cognito]
+    Browser([Browser]) -->|HTTPS custom domain| APIGW[API Gateway HTTP API<br/>Route 53 + ACM]
+    Browser -.->|Sign in, get JWT| Cognito[Cognito]
 
     subgraph AWS["AWS (us-east-1)"]
-        CF -->|Website files| S3[(S3)]
-        CF -->|"/api/*"| Lambda[Lambda<br/>FastAPI]
+        APIGW -->|HTTP_PROXY| URL[Lambda Function URL<br/>response streaming]
+        URL --> Lambda[Lambda Container<br/>FastAPI + Web Adapter]
+        Lambda -->|Serves SPA & assets| Static[Static files<br/>index.html, JS/CSS]
         Lambda -->|IAM login, TLS| Aurora[(Aurora PostgreSQL<br/>pauses when idle)]
         Guard[Awake guard<br/>every 15 min] -.->|Pauses API above daily cap| Lambda
     end

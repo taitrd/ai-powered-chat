@@ -28,8 +28,8 @@ Short records of the main choices, and when to revisit them. The full reasoning 
 **Why:** Chat needs one-way streaming: the browser sends a message, and the server streams one reply.
 
 - Lambda Function URLs support streaming responses, but not WebSockets.
-- WebSockets would need API Gateway, a connection store and per-chunk API calls, which adds more code and cost.
-- SSE uses the same `Authorization` header, CloudFront route and tests as the REST API.
+- WebSockets would need API Gateway WebSocket APIs, a connection store and per-chunk API calls, which adds more code and cost.
+- SSE uses the same `Authorization` header, API Gateway HTTP route and tests as the REST API.
 
 **Trade-off:** The server can't push messages while idle. The browser's `EventSource` doesn't support POST, so the stream is read with `fetch`.
 
@@ -69,13 +69,27 @@ Short records of the main choices, and when to revisit them. The full reasoning 
 
 **Trade-off:** Changes made on another device can take up to 1 hour to appear. Once the cap is reached, chat stops until the next UTC day.
 
-**Not chosen:** Caching AI replies, CloudFront caching for the API (risk of showing private data), and Redis (costs more than it saves).
+**Not chosen:** Caching AI replies, edge caching for the API (risk of exposing private conversation data), and Redis (costs more than it saves).
 
 ## 7. AWS CDK in TypeScript
 
 **Decision:** Define all infrastructure in CDK, split into five small stacks.
 
 **Why:** High-level constructs keep the code short and readable for beginners, and one command deploys everything. The database stack is separate and retained, so app deploys can't delete data.
+
+## 8. API Gateway HTTP API instead of CloudFront + S3
+
+**Decision:** Route all traffic through API Gateway HTTP API to Lambda, and bundle the frontend SPA directly into the FastAPI container.
+
+**Why:**
+- Bypasses CloudFront's account verification block without needing AWS support tickets.
+- Keeps 100% of the app inside AWS at $0 idle cost.
+- Preserves token-by-token response streaming for AI chat.
+- Ships as a single Docker image with no S3 bucket policies or CDN cache invalidation steps.
+
+**Trade-off:** Static files are served by Lambda instead of global CDN edges. Browser caching handles repeat visits.
+
+**Revisit when:** High global traffic volume justifies a multi-region CDN once CloudFront verification is available.
 
 ## Cost summary
 

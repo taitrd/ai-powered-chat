@@ -2,35 +2,81 @@
 
 [← Back to README](../README.md)
 
-> Describes the planned deployment. Steps become final after milestones M0 and M5.
+This guide covers deploying the application to AWS using AWS CDK.
 
 ## Prerequisites
 
-| Item | Notes |
-| :--- | :--- |
-| AWS account | Set a budget alert first, even though CDK also creates one |
-| AWS CLI v2 | Signed in with an admin profile, for example through `aws configure sso` |
-| Node.js 22 and Docker | CDK builds the Lambda container image locally |
-| A domain | Registered in Route 53, or delegated to a Route 53 hosted zone |
-| Gemini API key | Free from [Google AI Studio](https://aistudio.google.com/) |
+| Item                  | Notes                                                                  |
+| :-------------------- | :--------------------------------------------------------------------- |
+| AWS account           | Dedicated budget alert recommended                                     |
+| IAM credentials       | Admin permissions to bootstrap CDK and provision resources (see below) |
+| Node.js 22 and Docker | Used by CDK to build the Lambda container image                        |
+| Domain (optional)     | Hosted in Route 53 for custom domain and HTTPS                         |
+| Gemini API key        | Free tier from [Google AI Studio](https://aistudio.google.com/)        |
 
-Everything deploys to **`us-east-1`**. This keeps the CloudFront certificate and the app in one region.
+All stacks deploy to **`us-east-1`** to align ACM certificates, API Gateway, and backend infrastructure.
+
+### AWS Credentials & Permissions
+
+To bootstrap CDK and deploy all stacks, the executing AWS user or role requires **`AdministratorAccess`** (or permissions across CloudFormation, IAM, VPC, RDS, Secrets Manager, Lambda, ApiGatewayV2, Cognito, Route 53, ACM, SSM, and CloudWatch).
+
+#### Setting up credentials in `.env`:
+
+1. In the **AWS IAM Console** → **Users** → create a user with CLI access and attach the `AdministratorAccess` policy.
+2. Under **Security credentials**, create an **Access Key**.
+3. Add the keys to your root `.env` file:
+   ```ini
+   AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
+   AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+   AWS_DEFAULT_REGION=us-east-1
+   ```
+
+_Tip: CDK commands run via `npm run cdk -- <command>` inside `iac/` will automatically load credentials from this `.env` file._
+
+### Architecture Note: API Gateway HTTP API (No CloudFront Verification Block)
+
+Unlike CloudFront (which frequently blocks new or unverified AWS accounts with `Access denied: Your account must be verified before you can add new CloudFront resources`), this application uses **API Gateway HTTP API v2** with Route 53 and ACM. It requires no support verification tickets, has $0 idle cost, supports streaming responses, and cleanly serves both the React SPA and FastAPI backend under your custom domain.
 
 ## Stacks
 
-| Stack | Creates |
-| :--- | :--- |
-| `ChatAuth` | Cognito user pool and app client |
-| `ChatData` | Aurora PostgreSQL express cluster, kept even if the stack is deleted |
-| `ChatApi` | Lambda container, Function URL and awake guard |
-| `ChatWeb` | S3, CloudFront, ACM certificate, DNS records and the frontend's `config.json` |
-| `ChatCicd` | GitHub OIDC provider and deploy role |
+| Stack      | Creates                                                                               | Dependencies           |
+| :--------- | :------------------------------------------------------------------------------------ | :--------------------- |
+| `ChatAuth` | Cognito User Pool and public web client                                               | None                   |
+| `ChatData` | Aurora PostgreSQL Serverless v2 cluster with IAM authentication                       | None                   |
+| `ChatApi`  | FastAPI Lambda container, streaming Function URL, and daily awake guard               | `ChatAuth`, `ChatData` |
+| `ChatWeb`  | API Gateway HTTP API, Custom Domain (`aichat.taitrd.com`), Route 53 A-record, ACM SSL | `ChatApi`              |
+| `ChatCicd` | GitHub OIDC identity provider and deployment role                                     | None                   |
 
-## First deployment
+### Deploying a Single Stack
+
+You can deploy or update stacks individually rather than running `deploy --all`:
+
+```bash
+cd iac
+
+# Deploy Cognito authentication only:
+npm run cdk -- deploy ChatAuth
+
+# Deploy Aurora PostgreSQL cluster only:
+npm run cdk -- deploy ChatData
+
+# Deploy or update FastAPI backend Lambda (re-builds Docker container):
+npm run cdk -- deploy ChatApi
+
+# Deploy or update Frontend website (requires 'npm run build' in frontend first):
+npm run cdk -- deploy ChatWeb
+
+# Deploy GitHub CI/CD OIDC role only:
+npm run cdk -- deploy ChatCicd
+```
+
+> **Note:** If deploying for the first time, follow the dependency order: `ChatAuth` & `ChatData` → `ChatApi` → `ChatWeb`.
+
+## First Deployment
 
 ### 1. Configure
 
-Edit `iac/cdk.json`:
+Edit `iac/cdk.json` with your domain and GitHub repo (or leave domain empty for default API Gateway URL):
 
 ```json
 {
@@ -47,75 +93,92 @@ Edit `iac/cdk.json`:
 
 ```bash
 cd iac && npm install
-npx cdk bootstrap aws://<ACCOUNT_ID>/us-east-1
+npm run cdk -- bootstrap aws://<ACCOUNT_ID>/us-east-1
 ```
 
-### 3. Store the AI key
+_(Note: `npm run cdk` automatically loads your `.env` credentials)._
+
+### 3. Store AI Keys in SSM
+
+Use the helper script to store keys in AWS SSM Parameter Store (it auto-loads `.env` and uses the project's AWS CLI):
+
+```bash
+# Default: stores GEMINI_API_KEY from .env under /chat-app/prod/GEMINI_API_KEY
+./backend/scripts/set-ssm.sh
+
+# Pass custom key name and value:
+./backend/scripts/set-ssm.sh GEMINI_API_KEY "<your-key>"
+./backend/scripts/set-ssm.sh OPENAI_API_KEY "<your-key>"
+./backend/scripts/set-ssm.sh /custom/ssm/path "<value>"
+```
+
+Or run the AWS CLI directly:
 
 ```bash
 aws ssm put-parameter --region us-east-1 --type SecureString \
-  --name /chat-app/prod/GEMINI_API_KEY --value "<your-key>"
+  --name /chat-app/prod/GEMINI_API_KEY --value "<your-gemini-key>" --overwrite
 ```
 
-Add `OPENAI_API_KEY` the same way if you use OpenAI.
-
-### 4. Create the database, then run migrations
+### 4. Create Database and Run Migrations
 
 ```bash
-npx cdk deploy ChatData
-cd ../backend && ./scripts/migrate.sh prod   # alembic upgrade head using IAM auth
+# 1. Deploy the Aurora PostgreSQL cluster
+cd iac && npm run cdk -- deploy ChatData
+
+# 2. Initialize the 'app' database user with IAM auth
+# Connect as postgres (retrieve password from Secrets Manager) and execute:
+psql -h <CLUSTER_ENDPOINT> -p 5432 -U postgres -d chat -f ../backend/scripts/init-user.sql
+
+# 3. Run Alembic migrations against the cluster
+cd ../backend && ./scripts/migrate.sh prod
 ```
 
-If milestone M0 shows that CDK can't create an express cluster, this step will use a single documented AWS CLI command instead.
-
-### 5. Deploy everything else
+### 5. Build Frontend and Deploy Everything
 
 ```bash
-cd ../frontend && npm install && npm run build
-cd ../iac && npx cdk deploy --all
+cd iac
+# Builds production frontend and packages into backend container:
+npm run sync-frontend
+# Deploys backend API and custom domain on aichat.taitrd.com:
+npm run cdk -- deploy ChatApi ChatWeb
 ```
 
-The first deploy takes about 15–20 minutes, mostly for CloudFront and the certificate.
-
-### 6. Check
+### 6. Verify
 
 ```bash
-curl -I https://chat.example.com
-curl https://chat.example.com/healthz
+curl https://<domain-or-apigw-url>/healthz
 ```
 
-Then sign up in the browser and send a message.
+Visit the frontend URL in your browser, register an account, and send a test message.
 
 ## CI/CD with GitHub Actions
 
-1. Deploy `ChatCicd` once from your machine: `npx cdk deploy ChatCicd`.
-2. In GitHub, go to **Settings → Secrets and variables → Actions → Variables** and add:
-   - `AWS_ROLE_ARN`: the role ARN from the `ChatCicd` output
+![CI/CD Pipeline](diagrams/ci-pipeline.png)
+
+<sub>Source: [`ci-pipeline.mmd`](diagrams/ci-pipeline.mmd) and [`cicd-oidc.mmd`](diagrams/cicd-oidc.mmd)</sub>
+
+1. Deploy `ChatCicd` once: `cd iac && npm run cdk -- deploy ChatCicd`.
+2. In GitHub repository **Settings → Secrets and variables → Actions → Variables**, add:
+   - `AWS_ROLE_ARN`: the role ARN from `ChatCicd` output (e.g. `arn:aws:iam::141058755356:role/chat-app-github-deploy-role`)
    - `AWS_REGION`: `us-east-1`
-3. Push to `main`. The deploy workflow then:
-   1. Runs the tests.
-   2. Runs migrations.
-   3. Builds the frontend.
-   4. Runs `cdk deploy --all`.
-   5. Smoke-tests the live URL.
+3. Workflows:
+   - **Pull requests (`test.yml`)**: Runs Ruff lint, Pytest with PostgreSQL service container, frontend build/tests, and CDK synth.
+   - **Pushes to `main` (`deploy.yml`)**: Authenticates via AWS OIDC (no stored AWS keys), builds the production frontend SPA, deploys all CDK stacks, and smoke tests the live health URL.
 
-No AWS keys are stored in GitHub.
+## Day-to-Day Operations
 
-## Day-to-day operations
+| Task                 | Command / Action                                                                                |
+| :------------------- | :---------------------------------------------------------------------------------------------- |
+| **Rollback**         | Redeploy previous commit or Git revert                                                          |
+| **Raise awake cap**  | Update `awakeCapHours` in `iac/cdk.json` and deploy `ChatApi`                                   |
+| **Resume after cap** | Wait for next UTC day or run: `aws lambda delete-function-concurrency --function-name <api-fn>` |
+| **View logs**        | CloudWatch → Log groups → `/aws/lambda/<api-fn>`                                                |
+| **Restore backup**   | RDS console → Aurora cluster → **Restore to point in time**                                     |
 
-| Task | How |
-| :--- | :--- |
-| **Roll back** | Revert the commit and push, or redeploy an earlier commit |
-| **Raise the awake cap before a demo** | Change `awakeCapHours` and deploy `ChatApi` |
-| **Resume after the daily cap** | Wait for the next UTC day, or run `aws lambda put-function-concurrency --function-name <api-fn> --reserved-concurrent-executions 10` |
-| **Check costs** | AWS Billing console → Cost Explorer, filtered by the `app=chat-app` tag |
-| **Restore a backup** | RDS console → the cluster → **Restore to point in time** (7 days kept). Then point `ChatData` at the restored cluster and redeploy. |
-| **View logs** | CloudWatch → Log groups → `/aws/lambda/<api-fn>` |
-
-## Tear down
+## Tear Down
 
 ```bash
-npx cdk destroy --all
+cd iac && npm run cdk -- destroy --all
 ```
 
-The Aurora cluster and S3 backups are kept on purpose. Delete them in the console when you're sure you don't need the data. Turn off deletion protection on the cluster first.
+_Note: Aurora cluster data and S3 backups are retained to prevent accidental data loss. Delete them manually in the AWS Console if no longer needed._
