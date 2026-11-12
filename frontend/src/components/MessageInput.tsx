@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, Suspense, lazy } from "react";
 import { ArrowUp, Square } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "../stores/hooks";
+import { selectActiveStream } from "../stores/features/chat/chatSlice";
 import { stopStreaming } from "../stores/features/chat/chatThunks";
 import { showToast } from "../stores/features/ui/uiThunks";
 import { authConfig } from "../lib/config/auth";
@@ -29,9 +30,9 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const showToolbar = isDev && showMarkdown;
 
   const dispatch = useAppDispatch();
-  const streamStatus = useAppSelector((s) => s.chat.streamStatus);
-
-  const isStreaming = streamStatus === "streaming";
+  const activeId = useAppSelector((s) => s.conversations.activeId);
+  // Waiting for a reply in *this* chat only. A new or different chat can be used right away.
+  const isStreaming = useAppSelector(selectActiveStream) !== undefined;
 
   // Auto-resize textarea
   useEffect(() => {
@@ -175,7 +176,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
               {isStreaming ? (
                 <button
                   type="button"
-                  onClick={() => dispatch(stopStreaming())}
+                  onClick={() => activeId && dispatch(stopStreaming(activeId))}
                   className="w-8 h-8 rounded-xl bg-gray-900 hover:bg-gray-800 text-white flex items-center justify-center transition-all shadow-sm active:scale-95 cursor-pointer"
                   title="Stop generation"
                 >

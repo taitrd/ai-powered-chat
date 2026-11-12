@@ -17,8 +17,9 @@ import {
 const DEFAULT_TITLE = "New Chat";
 const AUTO_TITLE_LENGTH = 60;
 
-// AbortController isn't serializable, so it lives here instead of in Redux state.
-let activeController: AbortController | null = null;
+// AbortControllers aren't serializable, so they live here instead of in Redux state.
+// One per conversation, so stopping one chat's reply doesn't affect another's.
+const controllers = new Map<string, AbortController>();
 
 export const fetchMessages = createAppAsyncThunk(
   "chat/fetchMessages",
@@ -63,9 +64,16 @@ export const sendMessage = createAppAsyncThunk(
       dispatch(conversationTitleUpdated({ id: conversationId, title: autoTitle(trimmed) }));
     }
 
+    controllers.get(conversationId)?.abort(); // At most one reply per conversation.
     const controller = new AbortController();
-    activeController = controller;
+    controllers.set(conversationId, controller);
     let accumulated = "";
+    // True once a newer reply has replaced this one in the same conversation.
+    // (A stopped reply is not superseded: its partial text is still kept.)
+    const superseded = () => {
+      const current = controllers.get(conversationId);
+      return current !== undefined && current !== controller;
+    };
 
     await messagesApi.streamChat({
       conversationId,
@@ -73,10 +81,12 @@ export const sendMessage = createAppAsyncThunk(
       providerId,
       signal: controller.signal,
       onDelta: (delta) => {
+        if (superseded()) return;
         accumulated += delta;
-        dispatch(streamDelta(delta));
+        dispatch(streamDelta({ conversationId, delta }));
       },
       onEnd: () => {
+        if (superseded()) return;
         const message: Message | null = accumulated
           ? {
               id: `temp-asst-${Date.now()}`,
@@ -90,7 +100,8 @@ export const sendMessage = createAppAsyncThunk(
         dispatch(wakingUpSet(false));
       },
       onError: (error) => {
-        dispatch(streamFailed());
+        if (superseded()) return;
+        dispatch(streamFailed(conversationId));
         dispatch(
           showToast({
             type: "error",
@@ -104,13 +115,15 @@ export const sendMessage = createAppAsyncThunk(
       },
     });
 
-    if (activeController === controller) activeController = null;
+    if (controllers.get(conversationId) === controller) controllers.delete(conversationId);
   }
 );
 
-/** Stops the current reply. Text received so far stays on screen. */
-export const stopStreaming = (): AppThunk => (dispatch) => {
-  activeController?.abort();
-  activeController = null;
-  dispatch(streamStopped());
-};
+/** Stops a conversation's reply. Text received so far stays on screen. */
+export const stopStreaming =
+  (conversationId: string): AppThunk =>
+  (dispatch) => {
+    controllers.get(conversationId)?.abort();
+    controllers.delete(conversationId);
+    dispatch(streamStopped(conversationId));
+  };

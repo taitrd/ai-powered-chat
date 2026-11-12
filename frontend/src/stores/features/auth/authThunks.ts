@@ -19,6 +19,7 @@ import {
   devUserSet,
   authInitializingSet,
   authStatusSet,
+  authRequestStarted,
   authErrorSet,
   authSuccess,
   signedOut,
@@ -47,8 +48,8 @@ export const switchDevUser =
 export const signIn =
   (email: string, password: string): AppThunk =>
   async (dispatch) => {
-    dispatch(authStatusSet("loading"));
-    dispatch(authErrorSet(null));
+    // One action: clearing the error separately would reset status to idle.
+    dispatch(authRequestStarted());
     try {
       const tokens = await cognitoSignIn(email, password);
       setClientAccessToken(tokens.accessToken);
@@ -78,8 +79,8 @@ export const signIn =
 export const signUp =
   (email: string, password: string): AppThunk<Promise<boolean>> =>
   async (dispatch) => {
-    dispatch(authStatusSet("loading"));
-    dispatch(authErrorSet(null));
+    // One action: clearing the error separately would reset status to idle.
+    dispatch(authRequestStarted());
     try {
       await cognitoSignUp(email, password);
       dispatch(authStatusSet("idle"));
@@ -94,8 +95,8 @@ export const signUp =
 export const confirmSignUp =
   (email: string, code: string): AppThunk<Promise<boolean>> =>
   async (dispatch) => {
-    dispatch(authStatusSet("loading"));
-    dispatch(authErrorSet(null));
+    // One action: clearing the error separately would reset status to idle.
+    dispatch(authRequestStarted());
     try {
       await cognitoConfirmSignUp(email, code);
       dispatch(authStatusSet("idle"));
@@ -111,8 +112,8 @@ export const confirmSignUp =
 export const forgotPassword =
   (email: string): AppThunk<Promise<boolean>> =>
   async (dispatch) => {
-    dispatch(authStatusSet("loading"));
-    dispatch(authErrorSet(null));
+    // One action: clearing the error separately would reset status to idle.
+    dispatch(authRequestStarted());
     try {
       await cognitoForgotPassword(email);
       dispatch(authStatusSet("idle"));
@@ -132,8 +133,8 @@ export const confirmForgotPassword =
     newPassword: string,
   ): AppThunk<Promise<boolean>> =>
   async (dispatch) => {
-    dispatch(authStatusSet("loading"));
-    dispatch(authErrorSet(null));
+    // One action: clearing the error separately would reset status to idle.
+    dispatch(authRequestStarted());
     try {
       await cognitoConfirmForgotPassword(email, code, newPassword);
       dispatch(authStatusSet("idle"));
