@@ -1,25 +1,28 @@
 """FastAPI application entry point."""
 
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api.v1.router import api_router as api_v1_router
 from app.core.config import get_settings
 
 
 def create_app() -> FastAPI:
-    settings = get_settings()  # Fail fast on unsafe or incomplete settings.
+    get_settings()  # Fail fast on unsafe or incomplete settings.
     app = FastAPI(title="Lightweight AI Chat", version="0.1.0")
 
-    # Local development CORS (in production, CloudFront serves both on the same origin)
-    if settings.app_env in ("local", "test"):
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-            allow_credentials=True,
-            allow_methods=["*"],
-            allow_headers=["*"],
-        )
+    # Allow CORS across origins
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     app.include_router(api_v1_router, prefix="/api/v1")
 
@@ -27,6 +30,23 @@ def create_app() -> FastAPI:
     async def healthz() -> dict[str, str]:
         # Never touches the database, so health checks can't wake Aurora.
         return {"status": "ok"}
+
+    # Mount static assets and serve SPA if static directory exists
+    static_dir = os.path.join(os.path.dirname(__file__), "..", "static")
+    if os.path.isdir(static_dir):
+        assets_dir = os.path.join(static_dir, "assets")
+        if os.path.isdir(assets_dir):
+            app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+        @app.get("/{full_path:path}", tags=["spa"])
+        async def serve_spa(full_path: str):
+            file_path = os.path.join(static_dir, full_path)
+            if full_path and os.path.isfile(file_path):
+                return FileResponse(file_path)
+            index_path = os.path.join(static_dir, "index.html")
+            if os.path.isfile(index_path):
+                return FileResponse(index_path)
+            return {"status": "ok"}
 
     return app
 
