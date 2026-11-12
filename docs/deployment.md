@@ -157,7 +157,12 @@ Visit the frontend URL in your browser, register an account, and send a test mes
 
 <sub>Source: [`ci-pipeline.mmd`](diagrams/ci-pipeline.mmd) and [`cicd-oidc.mmd`](diagrams/cicd-oidc.mmd)</sub>
 
-1. Deploy `ChatCicd` once: `cd iac && npm run cdk -- deploy ChatCicd`.
+1. Set the repository's immutable IDs in `iac/cdk.json`, then deploy `ChatCicd` once from your machine: `cd iac && npm run cdk -- deploy ChatCicd`.
+   - Find the IDs with `curl -s https://api.github.com/repos/<owner>/<repo>`: `owner.id` goes in `githubOwnerId`, and `id` goes in `githubRepoId`.
+   - **Why the IDs are needed:** repositories created after July 15, 2026, or renamed or transferred since, get an ID-based OIDC subject such as `repo:owner@123/repo@456:ref:refs/heads/main`. A trust policy that only matches `repo:owner/repo:*` fails with `Not authorized to perform sts:AssumeRoleWithWebIdentity`. See [GitHub's changelog](https://github.blog/changelog/2026-04-23-immutable-subject-claims-for-github-actions-oidc-tokens/).
+   - **Older repositories:** leave both IDs out and the stack uses the old name-only format.
+   - **Scope:** the role only trusts pushes to `main` of this exact repository.
+   - **Deploy it from your machine:** CI can't fix its own trust policy, because it can't assume the role until the policy is fixed.
 2. In GitHub repository **Settings → Secrets and variables → Actions → Variables**, add:
    - `AWS_ROLE_ARN`: the role ARN from `ChatCicd` output (e.g. `arn:aws:iam::141058755356:role/chat-app-github-deploy-role`)
    - `AWS_REGION`: `us-east-1`

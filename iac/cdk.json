@@ -22,6 +22,8 @@
     "hostedZoneName": "aichat.taitrd.com",
     "certificateArn": "arn:aws:acm:us-east-1:141058755356:certificate/8a01a685-9781-4e87-b059-a2b23097d139",
     "githubRepo": "taitrd/ai-powered-chat",
+    "githubOwnerId": "16987286",
+    "githubRepoId": "1452139011",
     "awakeCapHours": 3
   }
 }

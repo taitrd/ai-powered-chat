@@ -40,6 +40,10 @@ const certificateArn =
   (app.node.tryGetContext("certificateArn") as string) || undefined;
 const githubRepo =
   (app.node.tryGetContext("githubRepo") as string) || "owner/repo";
+const githubOwnerId =
+  (app.node.tryGetContext("githubOwnerId") as string) || undefined;
+const githubRepoId =
+  (app.node.tryGetContext("githubRepoId") as string) || undefined;
 const awakeCapHours = Number(app.node.tryGetContext("awakeCapHours") || 3);
 
 // 1. Authentication stack (Cognito)
@@ -74,6 +78,8 @@ webStack.addStackDependency(apiStack);
 new CicdStack(app, "ChatCicd", {
   env,
   githubRepo,
+  githubOwnerId,
+  githubRepoId,
 });
 
 app.synth();

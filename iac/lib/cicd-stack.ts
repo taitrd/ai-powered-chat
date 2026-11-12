@@ -3,9 +3,34 @@ import * as iam from "aws-cdk-lib/aws-iam";
 import { Construct } from "constructs";
 
 export interface CicdStackProps extends cdk.StackProps {
+  /** "owner/repo", for example "taitrd/ai-powered-chat". */
   githubRepo: string;
+  /**
+   * Immutable numeric IDs of the owner and repository. Repositories created after
+   * 2026-07-15 (or renamed/transferred since) get an ID-based OIDC subject:
+   *   repo:OWNER@OWNER_ID/REPO@REPO_ID:ref:refs/heads/BRANCH
+   * Look them up with: curl -s https://api.github.com/repos/OWNER/REPO  (fields "owner.id" and "id")
+   * Leave both unset only for older repositories that still use repo:OWNER/REPO:...
+   */
+  githubOwnerId?: string;
+  githubRepoId?: string;
+  /** Branch allowed to deploy. Defaults to "main". */
+  deployBranch?: string;
 }
 
+/**
+ * Builds the OIDC `sub` value GitHub puts in tokens for pushes to the deploy branch.
+ * See https://github.blog/changelog/2026-04-23-immutable-subject-claims-for-github-actions-oidc-tokens/
+ */
+export function githubSubject(props: CicdStackProps): string {
+  const [owner, repo] = props.githubRepo.split("/");
+  const branch = props.deployBranch ?? "main";
+  const repoPart =
+    props.githubOwnerId && props.githubRepoId
+      ? `${owner}@${props.githubOwnerId}/${repo}@${props.githubRepoId}`
+      : `${owner}/${repo}`;
+  return `repo:${repoPart}:ref:refs/heads/${branch}`;
+}
 export class CicdStack extends cdk.Stack {
   public readonly deployRole: iam.Role;
 
@@ -22,7 +47,7 @@ export class CicdStack extends cdk.Stack {
       },
     );
 
-    // Deploy Role assumed by GitHub Actions for the repository
+    // Deploy role: only pushes to the deploy branch of this exact repository can assume it.
     this.deployRole = new iam.Role(this, "GitHubDeployRole", {
       roleName: "chat-app-github-deploy-role",
       assumedBy: new iam.FederatedPrincipal(
@@ -30,12 +55,7 @@ export class CicdStack extends cdk.Stack {
         {
           StringEquals: {
             "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-          },
-          StringLike: {
-            "token.actions.githubusercontent.com:sub": [
-              `repo:${props.githubRepo}:*`,
-              `repo:${props.githubRepo.toLowerCase()}:*`,
-            ],
+            "token.actions.githubusercontent.com:sub": githubSubject(props),
           },
         },
         "sts:AssumeRoleWithWebIdentity",
