@@ -1,5 +1,5 @@
 flowchart LR
-    Browser([Browser]) -->|HTTPS custom domain| APIGW[API Gateway HTTP API<br/>Route 53 + ACM]
+    Browser([Browser]) -->|HTTPS custom domain| APIGW[API Gateway REST API<br/>streaming, Route 53 + ACM]
     Browser -.->|Sign in, get JWT| Cognito[Cognito]
 
     subgraph AWS["AWS (us-east-1)"]

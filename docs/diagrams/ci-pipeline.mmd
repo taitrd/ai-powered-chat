@@ -12,6 +12,6 @@ flowchart TD
         Main_Trigger[Merge/Push to main] --> Main_Test[Run Quality Gates]
         Main_Test --> OIDC["AWS OIDC Authentication<br/>(sts:AssumeRoleWithWebIdentity)"]
         OIDC --> Build["Build React SPA & Sync<br/>(npm run sync-frontend)"]
-        Build --> Deploy["CDK Deploy<br/>(Builds Lambda container & updates HTTP API)"]
+        Build --> Deploy["CDK Deploy<br/>(Builds Lambda container & updates REST API)"]
         Deploy --> Smoke["Smoke Test Health Endpoint<br/>(curl https://aichat.taitrd.com/healthz)"]
     end
