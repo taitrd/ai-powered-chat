@@ -1,0 +1,27 @@
+{
+  "app": "npx ts-node --prefer-ts-exts bin/app.ts",
+  "watch": {
+    "include": ["**"],
+    "exclude": [
+      "README.md",
+      "cdk*.json",
+      "**/*.d.ts",
+      "**/*.js",
+      "tsconfig.json",
+      "package*.json",
+      "yarn.lock",
+      "node_modules",
+      "test"
+    ]
+  },
+  "context": {
+    "@aws-cdk/core:stackRelativeExports": true,
+    "accountId": "141058755356",
+    "region": "us-east-1",
+    "domainName": "aichat.taitrd.com",
+    "hostedZoneName": "aichat.taitrd.com",
+    "certificateArn": "arn:aws:acm:us-east-1:141058755356:certificate/8a01a685-9781-4e87-b059-a2b23097d139",
+    "githubRepo": "taitrd/ai-powered-chat",
+    "awakeCapHours": 3
+  }
+}

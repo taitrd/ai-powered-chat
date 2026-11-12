@@ -1,0 +1,27 @@
+{
+  "name": "chat-app-iac",
+  "version": "0.1.0",
+  "private": true,
+  "bin": {
+    "chat-app-iac": "bin/app.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "cdk": "dotenv -e ../.env.iac -- cdk",
+    "sync-frontend": "cd ../frontend && npm run build && rm -rf ../backend/static && mkdir -p ../backend/static && cp -r dist/* ../backend/static/",
+    "set-ssm": "../backend/scripts/set-ssm.sh"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "aws-cdk": "^2.177.0",
+    "dotenv-cli": "^11.1.0",
+    "ts-node": "^10.9.2",
+    "typescript": "~5.7.2"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.177.0",
+    "constructs": "^10.4.2",
+    "dotenv": "^18.0.10"
+  }
+}
