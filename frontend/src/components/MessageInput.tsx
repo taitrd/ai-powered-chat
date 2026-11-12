@@ -198,6 +198,19 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             </div>
           </div>
         </form>
+
+        {/* Privacy & Model Disclaimer */}
+        <p className="text-center text-[11px] text-gray-500 leading-normal px-2 select-none">
+          chats aren't used to improve our models. Gemini is AI and can make mistakes.{" "}
+          <a
+            href="https://support.google.com/gemini/answer/13594961"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-gray-700 transition-colors"
+          >
+            Your privacy & Gemini
+          </a>
+        </p>
       </div>
     </div>
   );
