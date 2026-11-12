@@ -44,6 +44,11 @@ const authSlice = createSlice({
     authStatusSet(state, action: PayloadAction<"idle" | "loading" | "error">) {
       state.status = action.payload;
     },
+    /** Starts an auth request: shows loading and clears the previous error in one step. */
+    authRequestStarted(state) {
+      state.status = "loading";
+      state.error = null;
+    },
     authErrorSet(state, action: PayloadAction<string | null>) {
       state.error = action.payload;
       state.status = action.payload ? "error" : "idle";
@@ -82,6 +87,7 @@ export const {
   authModalToggled,
   authInitializingSet,
   authStatusSet,
+  authRequestStarted,
   authErrorSet,
   authSuccess,
   signedOut,

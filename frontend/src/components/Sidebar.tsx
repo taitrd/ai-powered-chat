@@ -38,6 +38,8 @@ export const Sidebar: React.FC = () => {
     (s) => s.conversations.creatingConversation,
   );
   const pendingIds = useAppSelector((s) => s.conversations.pendingIds);
+  // Chats still waiting for or receiving a reply (shown with a spinner).
+  const streams = useAppSelector((s) => s.chat.streams);
 
   const sidebarOpen = useAppSelector((s) => s.ui.sidebarOpen);
   const models = useAppSelector((s) => s.ui.models);
@@ -205,6 +207,7 @@ export const Sidebar: React.FC = () => {
               const isActive = conv.id === activeId;
               const isEditing = editingId === conv.id;
               const isPending = pendingIds.includes(conv.id);
+              const isReplying = conv.id in streams;
 
               return (
                 <div
@@ -226,8 +229,11 @@ export const Sidebar: React.FC = () => {
                       : "text-gray-400 hover:bg-gray-800/50 hover:text-gray-200"
                   }`}
                 >
-                  {isPending ? (
-                    <Loader2 className="w-4 h-4 shrink-0 text-brand-400 animate-spin" />
+                  {isPending || isReplying ? (
+                    <Loader2
+                      className="w-4 h-4 shrink-0 text-brand-400 animate-spin"
+                      aria-label={isReplying ? "Waiting for reply" : undefined}
+                    />
                   ) : (
                     <MessageSquare className="w-4 h-4 shrink-0 text-gray-400" />
                   )}

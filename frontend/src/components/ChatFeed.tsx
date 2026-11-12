@@ -4,6 +4,7 @@ import remarkGfm from "remark-gfm";
 import { Bot, Loader2, Sparkles, User as UserIcon } from "lucide-react";
 import { Message } from "../types";
 import { useAppSelector } from "../stores/hooks";
+import { selectActiveStream } from "../stores/features/chat/chatSlice";
 
 interface ChatFeedProps {
   messages: Message[];
@@ -30,8 +31,10 @@ export const ChatFeed: React.FC<ChatFeedProps> = ({
   loading,
   activeConversationTitle,
 }) => {
-  const streamingContent = useAppSelector((s) => s.chat.streamingContent);
-  const streamStatus = useAppSelector((s) => s.chat.streamStatus);
+  // Only the active conversation's reply. Other chats keep streaming in the background.
+  const activeStream = useAppSelector(selectActiveStream);
+  const isStreaming = activeStream !== undefined;
+  const streamingContent = activeStream?.content ?? "";
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -64,7 +67,7 @@ export const ChatFeed: React.FC<ChatFeedProps> = ({
     );
   }
 
-  if (messages.length === 0 && streamStatus !== "streaming") {
+  if (messages.length === 0 && !isStreaming) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-gray-500">
         <div className="w-16 h-16 rounded-2xl bg-brand-50 text-brand-600 flex items-center justify-center mb-4 shadow-sm border border-brand-100">
@@ -138,7 +141,7 @@ export const ChatFeed: React.FC<ChatFeedProps> = ({
       })}
 
       {/* Streaming In-Flight Bubble */}
-      {streamStatus === "streaming" && (
+      {isStreaming && (
         <div className="flex items-start gap-3 min-w-0 w-full flex-row">
           <div className="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center shrink-0 text-white text-xs shadow-sm">
             <Bot className="w-4 h-4 animate-pulse" />

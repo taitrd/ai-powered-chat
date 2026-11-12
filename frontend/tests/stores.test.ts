@@ -11,10 +11,15 @@ import {
   initAuth,
   signIn,
   signOut,
+  signUp,
   switchDevUser,
 } from "../src/stores/features/auth/authThunks";
 import { authModalToggled } from "../src/stores/features/auth/authSlice";
-import { selectActiveMessages } from "../src/stores/features/chat/chatSlice";
+import {
+  selectActiveMessages,
+  selectActiveStream,
+  selectIsStreaming,
+} from "../src/stores/features/chat/chatSlice";
 import { sendMessage, stopStreaming } from "../src/stores/features/chat/chatThunks";
 import { conversationTitleUpdated } from "../src/stores/features/conversations/conversationsSlice";
 import {
@@ -188,7 +193,7 @@ describe("chat streaming", () => {
       ["user", "Hi there"],
       ["assistant", "Hello world"],
     ]);
-    expect(store.getState().chat.streamStatus).toBe("idle");
+    expect(store.getState().chat.streams).toEqual({});
     expect(store.getState().conversations.items[0].title).toBe("Hi there");
   });
 
@@ -207,12 +212,11 @@ describe("chat streaming", () => {
     const store = storeWithConversations([conversation("c1")], "c1");
     const pending = store.dispatch(sendMessage({ conversationId: "c1", content: "Hi" }));
 
-    expect(store.getState().chat.streamStatus).toBe("streaming");
-    expect(store.getState().chat.streamingContent).toBe("Partial");
+    expect(selectActiveStream(store.getState())).toEqual({ content: "Partial" });
 
     finish();
     await pending;
-    expect(store.getState().chat.streamingContent).toBe("");
+    expect(selectActiveStream(store.getState())).toBeUndefined();
   });
 
   it("stop aborts the request and returns to idle", async () => {
@@ -227,10 +231,10 @@ describe("chat streaming", () => {
     const store = storeWithConversations([conversation("c1")], "c1");
     const pending = store.dispatch(sendMessage({ conversationId: "c1", content: "Hi" }));
 
-    store.dispatch(stopStreaming());
+    store.dispatch(stopStreaming("c1"));
     await pending;
     expect(signal?.aborted).toBe(true);
-    expect(store.getState().chat.streamStatus).toBe("idle");
+    expect(store.getState().chat.streams).toEqual({});
   });
 
   it("shows a retry toast with plain data when streaming fails", async () => {
@@ -240,11 +244,62 @@ describe("chat streaming", () => {
     const store = storeWithConversations([conversation("c1")], "c1");
     await store.dispatch(sendMessage({ conversationId: "c1", content: "Hi", providerId: "gemini" }));
 
-    expect(store.getState().chat.streamStatus).toBe("error");
+    expect(store.getState().chat.streams).toEqual({});
     expect(store.getState().ui.toasts[0]).toMatchObject({
       message: "Free quota reached",
       retryMessage: { conversationId: "c1", content: "Hi", providerId: "gemini" },
     });
+  });
+
+  it("keeps the waiting state in its own chat when you open a new chat", async () => {
+    let finish = () => {};
+    mockedApi.streamChat.mockImplementation(
+      ({ onDelta, onEnd }) =>
+        new Promise<void>((resolve) => {
+          finish = () => {
+            onDelta("Reply for chat 1");
+            onEnd();
+            resolve();
+          };
+        })
+    );
+    mockedApi.createConversation.mockResolvedValue(conversation("c2"));
+    const store = storeWithConversations([conversation("c1")], "c1");
+
+    const pending = store.dispatch(sendMessage({ conversationId: "c1", content: "Hi" }));
+    expect(selectActiveStream(store.getState())).toBeDefined(); // chat 1 is waiting
+
+    await store.dispatch(createConversation()); // the new chat becomes active
+    expect(store.getState().conversations.activeId).toBe("c2");
+    expect(selectActiveStream(store.getState())).toBeUndefined(); // new chat isn't waiting
+    expect(selectIsStreaming(store.getState(), "c1")).toBe(true); // chat 1 still is
+
+    finish();
+    await pending;
+    expect(selectIsStreaming(store.getState(), "c1")).toBe(false);
+    const chat1 = store.getState().chat.byConversation["c1"];
+    expect(chat1.map((m) => m.content)).toEqual(["Hi", "Reply for chat 1"]); // saved to chat 1
+    expect(store.getState().chat.byConversation["c2"]).toBeUndefined();
+  });
+
+  it("stopping one chat doesn't stop another chat's reply", async () => {
+    const signals: Record<string, AbortSignal | undefined> = {};
+    mockedApi.streamChat.mockImplementation(
+      (options) =>
+        new Promise<void>((resolve) => {
+          signals[options.conversationId] = options.signal;
+          options.signal?.addEventListener("abort", () => resolve());
+        })
+    );
+    const store = storeWithConversations([conversation("c1"), conversation("c2")], "c1");
+    store.dispatch(sendMessage({ conversationId: "c1", content: "One" }));
+    store.dispatch(sendMessage({ conversationId: "c2", content: "Two" }));
+
+    store.dispatch(stopStreaming("c1"));
+
+    expect(signals.c1?.aborted).toBe(true);
+    expect(signals.c2?.aborted).toBe(false);
+    expect(selectIsStreaming(store.getState(), "c2")).toBe(true);
   });
 
   it("ignores empty messages", async () => {
@@ -286,6 +341,28 @@ describe("auth", () => {
     expect(store.getState().auth.email).toBe("user@example.com");
     expect(store.getState().auth.accessToken).toBe("mock-access-token");
     expect(store.getState().auth.authModalOpen).toBe(false);
+  });
+
+  it("shows loading while signing in or signing up, then clears it", async () => {
+    let resolveSignIn = (_: { accessToken: string; idToken: string; refreshToken: string }) => {};
+    mockedApi.cognitoSignIn.mockReturnValue(new Promise((r) => (resolveSignIn = r)));
+    mockedApi.fetchConversations.mockResolvedValue({ items: [], next_cursor: null });
+    const store = makeStore();
+
+    const signingIn = store.dispatch(signIn("user@example.com", "Password123!"));
+    expect(store.getState().auth.status).toBe("loading"); // buttons show a spinner
+    resolveSignIn({ accessToken: "a", idToken: "i", refreshToken: "r" });
+    await signingIn;
+    expect(store.getState().auth.status).toBe("idle");
+
+    let rejectSignUp = (_: Error) => {};
+    mockedApi.cognitoSignUp.mockReturnValue(new Promise((_, reject) => (rejectSignUp = reject)));
+    const signingUp = store.dispatch(signUp("new@example.com", "Password123!"));
+    expect(store.getState().auth.status).toBe("loading");
+    rejectSignUp(new Error("Email already registered"));
+    expect(await signingUp).toBe(false);
+    expect(store.getState().auth.status).toBe("error");
+    expect(store.getState().auth.error).toBe("Email already registered");
   });
 
   it("handles cognito signOut flow", () => {
