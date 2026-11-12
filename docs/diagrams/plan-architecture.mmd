@@ -1,5 +1,5 @@
 flowchart LR
-    Client([User Browser]) -->|HTTPS custom domain| APIGW[API Gateway HTTP API<br/>Route 53 + ACM]
+    Client([User Browser]) -->|HTTPS custom domain| APIGW[API Gateway REST API<br/>streaming, Route 53 + ACM]
     Client -.->|Sign in, get JWT| Cognito[Cognito User Pool]
 
     subgraph AWS["AWS (single region: us-east-1)"]

@@ -2,102 +2,71 @@
 
 [← Back to README](../README.md)
 
-Short records of the main choices, and when to revisit them. The full reasoning is in [`PLAN.md`](../PLAN.md).
+The main choices, why they were made, and when to revisit them. Details are in [`PLAN.md`](../PLAN.md).
 
-## 1. Lambda + Aurora Serverless for hosting
+## 1. Lambda + Aurora Serverless
 
-**Decision:** Run FastAPI on Lambda, and use an Aurora PostgreSQL express cluster that pauses when idle.
+- **Choice:** FastAPI runs on Lambda, and the database is Aurora PostgreSQL, which pauses when idle.
+- **Why:** You pay almost nothing while nobody uses the app.
+- **Trade-off:** The first request after a quiet period waits 15–30 seconds while the database wakes up.
+- **Revisit when:** Real users need instant replies.
 
-**Why:** It's the closest AWS option to pay-as-you-go. Both compute and database cost almost nothing while idle, and running without a VPC avoids NAT Gateway charges.
-
-| Option | Approx. monthly cost | Why not chosen |
+| Alternative | Monthly cost | Why not |
 | :--- | :--- | :--- |
-| EC2 with Docker | ~$11.50 | Fixed cost, and we'd handle backups ourselves. This is the fallback if M0 fails. |
-| Lambda + RDS | ~$15–20 | RDS never pauses, and a Lambda in a VPC needs a NAT to reach Gemini |
-| Fargate + ALB + RDS | ~$55 | Good for steady traffic, too costly for a demo |
-| App Runner | — | Closed to new customers since April 30, 2026 |
+| EC2 with Docker | ~$11.50 | Fixed cost, and we'd manage backups |
+| Fargate + RDS | ~$55 | Too costly for a demo |
 
-**Trade-off:** The first request after idle waits 15–30+ seconds. The database endpoint is reachable from the internet and protected by IAM login.
+## 2. API Gateway REST API with streaming
 
-**Revisit when:** Real users need instant responses, or the database is awake for more than about 160 hours a month.
+- **Choice:** One REST API serves both the website and the API through the Lambda.
+- **Why:**
+  - Replies stream token by token, for up to 5 minutes.
+  - It avoids CloudFront, which this AWS account isn't verified for.
+- **Why not an HTTP API:** an HTTP API can't stream and stops after about 30 seconds. It was tried first, and replies went missing.
+- **Trade-off:** Files come from Lambda instead of a global CDN, which is fine at demo scale.
 
-## 2. SSE instead of WebSockets
+## 3. SSE instead of WebSockets
 
-**Decision:** Stream replies with Server-Sent Events over a normal HTTP response.
+- **Choice:** Replies stream as Server-Sent Events over a normal HTTP response.
+- **Why:** Chat only needs the server to stream one reply per message. SSE works with the same login header and routes as the rest of the API. WebSockets would need an extra API Gateway type and more code.
+- **Revisit when:** Adding typing indicators, live shared chats or voice.
 
-**Why:** Chat needs one-way streaming: the browser sends a message, and the server streams one reply.
+## 4. Several AI providers, Gemini by default
 
-- Lambda Function URLs support streaming responses, but not WebSockets.
-- WebSockets would need API Gateway WebSocket APIs, a connection store and per-chunk API calls, which adds more code and cost.
-- SSE uses the same `Authorization` header, API Gateway HTTP route and tests as the REST API.
+- **Choice:** A small adapter per provider. Gemini and OpenAI share one adapter, and Claude on Bedrock has another.
+- **Why:** Gemini's free tier keeps AI at $0, and adding a provider is mostly configuration.
+- **Trade-off:** Google may use free-tier prompts. Falling back to a paid provider is off by default.
 
-**Trade-off:** The server can't push messages while idle. The browser's `EventSource` doesn't support POST, so the stream is read with `fetch`.
+## 5. Redux Toolkit
 
-**Revisit when:** Adding typing indicators, shared live conversations, notifications or voice.
+- **Choice:** Four slices (`auth`, `conversations`, `chat`, `ui`). Only thunks call the API.
+- **Why:** The team knows Redux, and the structure is easy to follow (see [`frontend/agent/CONVENTIONS.md`](../frontend/agent/CONVENTIONS.md)).
 
-## 3. Multiple AI providers, with Gemini as the default
+## 6. Cognito
 
-**Decision:** Use a small adapter interface, with providers listed in `providers.yaml`. One OpenAI-compatible adapter serves both Gemini and OpenAI, and a second adapter serves Claude on Bedrock.
+- **Choice:** Users sign in with Cognito.
+- **Why:** It's free up to 10,000 monthly users, and AWS handles passwords and email checks.
 
-**Why:** Gemini's free tier keeps the demo at $0 for AI. Adding another provider is usually just configuration and a key.
+## 7. Caching and limits
 
-**Trade-off:** Free-tier prompts may be used by Google, and free limits are low. Fallback to another provider is off by default, so it never spends money unexpectedly.
+- **Choice:**
+  - Cache chats in the browser.
+  - Limit messages per user and per day.
+  - Pause chat once the database has been awake for 3 hours in a day.
+- **Why:** The database bills for time awake, so fewer wake-ups means a lower bill, and the cap limits the worst case.
+- **Trade-off:** Another device's changes can take up to an hour to show, and chat pauses until the next day once the cap is hit.
 
-**Not chosen:** LiteLLM and LangChain, which are large dependencies for about 50 lines of code per adapter.
+## 8. AWS CDK
 
-## 4. Redux Toolkit for frontend state
+- **Choice:** All infrastructure is in five small CDK stacks.
+- **Why:** The code is short, and one command deploys everything. The database stack is separate, so app deploys can't delete data.
 
-**Decision:** Four Redux Toolkit slices: `auth`, `conversations`, `chat` and `ui`. API calls happen only in async thunks.
+## Monthly cost
 
-**Why:** The team already knows Redux. Slices, thunks and Redux DevTools give a predictable structure that new developers and AI coding agents can follow (see [`frontend/agent/CONVENTIONS.md`](../frontend/agent/CONVENTIONS.md)).
-
-**Trade-off:** More code than Zustand, and about 10 KB more JavaScript after compression. State must stay serializable, so the stream's `AbortController` lives outside the store.
-
-**Not chosen:** Zustand, which was used first and replaced for familiarity, and TanStack Query, which would be a second state library.
-
-## 5. Cognito for authentication
-
-**Decision:** Users sign in with Cognito, and the API validates access tokens.
-
-**Why:** It's free for up to 10,000 monthly users, and AWS handles password storage, email verification and token rotation.
-
-## 6. Caching, limits and a daily awake cap
-
-**Decision:** Cache conversations in the browser. Limit messages per user and per day. Pause the API once Aurora has been awake for 3 hours in a UTC day.
-
-**Why:** Aurora bills for the time it's awake, not for each query, and every wake lasts at least 5 minutes. Caching avoids wakes, and the cap limits the worst case.
-
-**Trade-off:** Changes made on another device can take up to 1 hour to appear. Once the cap is reached, chat stops until the next UTC day.
-
-**Not chosen:** Caching AI replies, edge caching for the API (risk of exposing private conversation data), and Redis (costs more than it saves).
-
-## 7. AWS CDK in TypeScript
-
-**Decision:** Define all infrastructure in CDK, split into five small stacks.
-
-**Why:** High-level constructs keep the code short and readable for beginners, and one command deploys everything. The database stack is separate and retained, so app deploys can't delete data.
-
-## 8. API Gateway HTTP API instead of CloudFront + S3
-
-**Decision:** Route all traffic through API Gateway HTTP API to Lambda, and bundle the frontend SPA directly into the FastAPI container.
-
-**Why:**
-- Bypasses CloudFront's account verification block without needing AWS support tickets.
-- Keeps 100% of the app inside AWS at $0 idle cost.
-- Preserves token-by-token response streaming for AI chat.
-- Ships as a single Docker image with no S3 bucket policies or CDN cache invalidation steps.
-
-**Trade-off:** Static files are served by Lambda instead of global CDN edges. Browser caching handles repeat visits.
-
-**Revisit when:** High global traffic volume justifies a multi-region CDN once CloudFront verification is available.
-
-## Cost summary
-
-| Scenario | Approx. AWS cost per month |
+| Usage | AWS cost |
 | :--- | :--- |
-| Idle | ~$0.75 (storage, DNS, images) |
+| Idle | ~$0.75 |
 | Light demo use | ~$2 |
-| Daily awake cap reached every day | ~$7–13 |
-| Growth: Fargate + ALB, database always on | ~$55–100 |
+| Daily cap hit every day | ~$7–13 |
 
-These are estimates, so confirm them in the AWS Pricing Calculator. The domain fee and any paid AI usage are extra.
+These are estimates. The domain and any paid AI usage are extra.

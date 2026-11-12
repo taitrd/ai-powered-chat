@@ -12,7 +12,7 @@
 
 | Part            | Job                                                                                                                                                         |
 | :-------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **API Gateway** | The single public entry point (HTTP API v2). Configured with custom domain & Route 53 alias, securely proxies all requests to Lambda.                       |
+| **API Gateway** | The single public entry point: a REST API with response streaming, so replies arrive token by token. It has the custom domain and Route 53 alias, and proxies every request to the Lambda Function URL.                       |
 | **Lambda**      | Runs the FastAPI container with AWS Lambda Web Adapter. Serves both the React SPA (static assets) and the `/api/v1/*` backend, scaling to zero when unused. |
 | **Aurora**      | Stores users, conversations and messages. It pauses after 5 idle minutes.                                                                                   |
 | **Cognito**     | Handles sign-up, sign-in and tokens.                                                                                                                        |

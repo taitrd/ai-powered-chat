@@ -25,7 +25,7 @@ A small AI chat app with saved conversations, user accounts and streaming replie
 | Backend | Python, FastAPI, running on AWS Lambda |
 | Database | Aurora PostgreSQL Serverless, which pauses when idle |
 | Auth | Amazon Cognito |
-| Hosting | API Gateway HTTP API, with Route 53 and ACM for custom domain and HTTPS |
+| Hosting | API Gateway REST API with response streaming, plus Route 53 and ACM for the custom domain and HTTPS |
 | IaC and CI/CD | AWS CDK (TypeScript), GitHub Actions |
 
 ## Documentation
@@ -45,7 +45,7 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Then open the API docs at http://localhost:8000/docs. The web app at http://localhost:5173 arrives in milestone M3. No AI key is needed: the default `fake` provider returns test replies. See [Local setup](docs/local-setup.md) to use a real AI provider.
+Open http://localhost:5173. No AI key is needed: the default `fake` provider returns test replies. See [Local setup](docs/local-setup.md) to use a real AI.
 
 ## Good to know
 
