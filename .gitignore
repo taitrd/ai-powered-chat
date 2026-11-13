@@ -29,6 +29,6 @@ iac/node_modules/
 .idea/
 .vscode/
 
-docs/diagrams/*.png
+!docs/diagrams/*.png
 
 PLAN.md
