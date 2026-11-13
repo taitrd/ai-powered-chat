@@ -5,7 +5,7 @@ import json
 import uuid
 from collections.abc import AsyncIterator
 
-from sqlalchemy import func
+from sqlalchemy import func, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -13,8 +13,14 @@ from app.db.models import Conversation, Message
 from app.db.session import get_sessionmaker
 from app.llm.base import ChatMessage, LLMError, RateLimited, StreamEnd, TextDelta, Unavailable
 from app.llm.registry import get_registry
+from app.repositories import conversations as conversations_repo
 from app.repositories import messages as messages_repo
-from app.services.limits import check_daily_limits, validate_message_length
+from app.services.limits import (
+    ConversationFullError,
+    LimitExceededError,
+    record_daily_usage,
+    validate_message_length,
+)
 
 # Send an SSE comment when the provider is quiet this long, so proxies keep the stream open.
 HEARTBEAT_SECONDS = 15.0
@@ -38,8 +44,23 @@ async def prepare_user_turn(
     # 1. Validate length
     clean_content = validate_message_length(raw_content)
 
-    # 2. Check limits
-    await check_daily_limits(session, conversation.user_id)
+    # 2. Reserve room for this question and its reply, then count it against the daily limits.
+    #    Both are single statements in the same transaction as the message itself.
+    settings = get_settings()
+    new_count = await conversations_repo.reserve_slots(
+        session, conversation.id, settings.max_messages_per_conversation
+    )
+    if new_count is None:
+        await session.rollback()
+        raise ConversationFullError(
+            f"This chat is full ({settings.max_messages_per_conversation} messages). "
+            "Start a new chat or clear this one."
+        )
+    try:
+        await record_daily_usage(session, conversation.user_id)
+    except LimitExceededError:
+        await session.rollback()
+        raise
 
     # 3. Add user message
     effective_pid = provider_id or conversation.provider_id or get_settings().llm_default
@@ -65,11 +86,11 @@ async def prepare_user_turn(
     if conversation.title == "New Chat":
         conversation.title = generate_title(clean_content)
 
-    conversation.updated_at = func.now()
     if provider_id or not conversation.provider_id:
         conversation.provider_id = effective_pid
 
     await session.commit()
+    await session.refresh(conversation)
 
     # 5. Load context messages (up to 40)
     history = await messages_repo.get_recent_history(session, conversation.id, limit=40)
@@ -153,10 +174,19 @@ async def stream_chat_reply(
                     model=final_model,
                 )
                 save_session.add(asst_msg)
-                conv = await save_session.get(Conversation, conversation_id)
-                if conv:
-                    conv.updated_at = func.now()
+                new_count = await save_session.scalar(
+                    update(Conversation)
+                    .where(Conversation.id == conversation_id)
+                    .values(
+                        message_count=Conversation.message_count + 1, updated_at=func.now()
+                    )
+                    .returning(Conversation.message_count)
+                )
                 await save_session.commit()
+            if new_count is not None:
+                left = max(settings.max_messages_per_conversation - new_count, 0)
+                counts = json.dumps({"message_count": new_count, "messages_left": left})
+                yield f"data: {counts}\n\n"
 
         yield "data: [DONE]\n\n"
 

@@ -11,9 +11,10 @@ from app.api.v1.schemas.conversations import (
     ConversationPage,
     ConversationUpdate,
 )
-from app.api.v1.schemas.messages import MessageOut
+from app.api.v1.schemas.messages import MessageOut, MessagePage
+from app.core.config import get_settings
 from app.core.security import get_current_user
-from app.db.models import Conversation, Message, User
+from app.db.models import Conversation, User
 from app.db.session import get_session
 from app.repositories import conversations as conversations_repo
 from app.repositories import messages as messages_repo
@@ -91,11 +92,37 @@ async def delete_conversation(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.get("/{conversation_id}/messages", response_model=list[MessageOut])
+@router.get("/{conversation_id}/messages", response_model=MessagePage)
 async def list_messages(
+    conversation_id: uuid.UUID,
+    limit: int | None = Query(None, ge=1, le=100),
+    before: str | None = None,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> MessagePage:
+    """Newest page first. Pass the returned `next_cursor` as `before` for older messages."""
+    await get_owned_conversation(session, user, conversation_id)
+    try:
+        items, next_cursor = await messages_repo.list_page(
+            session,
+            conversation_id,
+            limit=limit or get_settings().message_page_size,
+            before=before,
+        )
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid cursor") from exc
+    return MessagePage(
+        items=[MessageOut.model_validate(m) for m in items], next_cursor=next_cursor
+    )
+
+
+@router.delete("/{conversation_id}/messages", status_code=status.HTTP_204_NO_CONTENT)
+async def clear_messages(
     conversation_id: uuid.UUID,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> list[Message]:
+) -> Response:
+    """Delete a chat's messages and reset its counter. Keeps the title and provider."""
     await get_owned_conversation(session, user, conversation_id)
-    return await messages_repo.list_for_conversation(session, conversation_id)
+    await messages_repo.delete_all(session, conversation_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
