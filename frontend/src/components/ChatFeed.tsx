@@ -9,6 +9,10 @@ import { selectActiveStream } from "../stores/features/chat/chatSlice";
 interface ChatFeedProps {
   messages: Message[];
   loading: boolean;
+  /** Older messages exist on the server. */
+  hasOlder?: boolean;
+  loadingOlder?: boolean;
+  onLoadOlder?: () => void;
   activeConversationTitle?: string;
 }
 
@@ -29,6 +33,9 @@ const markdownComponents: Components = {
 export const ChatFeed: React.FC<ChatFeedProps> = ({
   messages,
   loading,
+  hasOlder = false,
+  loadingOlder = false,
+  onLoadOlder,
   activeConversationTitle,
 }) => {
   // Only the active conversation's reply. Other chats keep streaming in the background.
@@ -38,12 +45,27 @@ export const ChatFeed: React.FC<ChatFeedProps> = ({
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom whenever messages or streamingContent updates
+  // Height before older messages were added, so the view can stay where it was.
+  const heightBeforeOlder = useRef<number | null>(null);
+
+  const loadOlder = () => {
+    if (!hasOlder || loadingOlder || !onLoadOlder) return;
+    heightBeforeOlder.current = scrollRef.current?.scrollHeight ?? null;
+    onLoadOlder();
+  };
+
+  // Auto-scroll to bottom when messages or streamingContent update, except when older
+  // messages were added above: then keep the current view in place.
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    const el = scrollRef.current;
+    if (!el) return;
+    if (heightBeforeOlder.current !== null && !loadingOlder) {
+      el.scrollTop = el.scrollHeight - heightBeforeOlder.current;
+      heightBeforeOlder.current = null;
+    } else if (heightBeforeOlder.current === null) {
+      el.scrollTop = el.scrollHeight;
     }
-  }, [messages, streamingContent]);
+  }, [messages, streamingContent, loadingOlder]);
 
   if (loading && messages.length === 0) {
     return (
@@ -87,8 +109,24 @@ export const ChatFeed: React.FC<ChatFeedProps> = ({
   return (
     <div
       ref={scrollRef}
+      onScroll={(e) => {
+        if (e.currentTarget.scrollTop < 80) loadOlder();
+      }}
       className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 max-w-7xl mx-auto w-full"
     >
+      {hasOlder && (
+        <div className="flex justify-center">
+          <button
+            type="button"
+            onClick={loadOlder}
+            disabled={loadingOlder}
+            className="text-[11px] text-gray-600 bg-gray-100 hover:bg-gray-200 border border-gray-200 px-2.5 py-0.5 rounded-full cursor-pointer"
+          >
+            {loadingOlder ? "Loading older messages..." : "Load older messages"}
+          </button>
+        </div>
+      )}
+
       {loading && messages.length > 0 && (
         <div className="flex justify-center -mt-2 mb-2">
           <span className="text-[11px] text-gray-500 bg-gray-100/90 border border-gray-200 px-2.5 py-0.5 rounded-full flex items-center gap-1.5 shadow-xs">

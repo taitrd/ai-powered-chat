@@ -1,6 +1,7 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import type { Conversation } from "../../../types";
 import type { RootState } from "../../index";
+import { clearMessages } from "../chat/chatThunks";
 import {
   createConversation,
   deleteConversation,
@@ -41,6 +42,18 @@ const conversationsSlice = createSlice({
       const conversation = state.items.find((c) => c.id === action.payload.id);
       if (conversation) conversation.title = action.payload.title;
     },
+    /** The chat's size changed (a reply was saved, or the server reported it is full). */
+    conversationCountsUpdated(
+      state,
+      action: PayloadAction<{ id: string; messages_left: number; message_count?: number }>,
+    ) {
+      const conversation = state.items.find((c) => c.id === action.payload.id);
+      if (!conversation) return;
+      conversation.messages_left = action.payload.messages_left;
+      if (action.payload.message_count !== undefined) {
+        conversation.message_count = action.payload.message_count;
+      }
+    },
     conversationsReset() {
       return initialState;
     },
@@ -72,6 +85,14 @@ const conversationsSlice = createSlice({
       })
       .addCase(createConversation.rejected, (state) => {
         state.creatingConversation = false;
+      })
+
+      .addCase(clearMessages.fulfilled, (state, action) => {
+        const conversation = state.items.find((c) => c.id === action.meta.arg);
+        if (conversation) {
+          conversation.messages_left += conversation.message_count;
+          conversation.message_count = 0;
+        }
       })
 
       .addCase(renameConversation.pending, (state, action) => {
@@ -106,7 +127,12 @@ const conversationsSlice = createSlice({
   },
 });
 
-export const { conversationSelected, conversationTitleUpdated, conversationsReset } =
+export const {
+  conversationSelected,
+  conversationTitleUpdated,
+  conversationCountsUpdated,
+  conversationsReset,
+} =
   conversationsSlice.actions;
 
 export const selectActiveConversation = (state: RootState): Conversation | undefined =>

@@ -6,12 +6,13 @@ import { MessageInput } from "./components/MessageInput";
 import { ToastContainer } from "./components/ToastContainer";
 import { WakingBanner } from "./components/WakingBanner";
 import { PausedBanner } from "./components/PausedBanner";
+import { FullChatPanel } from "./components/FullChatPanel";
 import { DemoNotice } from "./components/DemoNotice";
 import { useAppDispatch, useAppSelector } from "./stores/hooks";
 import { initAuth } from "./stores/features/auth/authThunks";
 import { authModalToggled } from "./stores/features/auth/authSlice";
-import { selectActiveMessages } from "./stores/features/chat/chatSlice";
-import { sendMessage } from "./stores/features/chat/chatThunks";
+import { selectActiveMessages, selectHasOlder } from "./stores/features/chat/chatSlice";
+import { fetchOlderMessages, sendMessage } from "./stores/features/chat/chatThunks";
 import { selectActiveConversation } from "./stores/features/conversations/conversationsSlice";
 import {
   createConversation,
@@ -32,6 +33,8 @@ export const App: React.FC = () => {
   const activeId = useAppSelector((s) => s.conversations.activeId);
   const activeConversation = useAppSelector(selectActiveConversation);
   const messages = useAppSelector(selectActiveMessages);
+  const hasOlder = useAppSelector(selectHasOlder);
+  const loadingOlder = useAppSelector((s) => s.chat.loadingOlder);
   const loadingMessages = useAppSelector((s) => s.chat.loadingMessages);
   const creatingConversation = useAppSelector((s) => s.conversations.creatingConversation);
   const selectedModelId = useAppSelector((s) => s.ui.selectedModelId);
@@ -107,11 +110,25 @@ export const App: React.FC = () => {
         <ChatFeed
           messages={messages}
           loading={loadingMessages}
+          hasOlder={hasOlder}
+          loadingOlder={loadingOlder}
+          onLoadOlder={() => activeId && dispatch(fetchOlderMessages(activeId))}
           activeConversationTitle={activeConversation?.title}
         />
 
-        {/* Input Bar */}
-        <MessageInput onSendMessage={handleSend} disabled={creatingConversation || isPaused} />
+        {/* Near the limit: countdown. At the limit: new chat or clear. */}
+        {activeConversation && activeConversation.messages_left < 2 ? (
+          <FullChatPanel conversationId={activeConversation.id} />
+        ) : (
+          <>
+            {activeConversation && activeConversation.messages_left <= 10 && (
+              <p className="text-center text-xs text-amber-700" role="status">
+                {activeConversation.messages_left} messages left in this chat
+              </p>
+            )}
+            <MessageInput onSendMessage={handleSend} disabled={creatingConversation || isPaused} />
+          </>
+        )}
 
         {/* Bottom Demo Notice */}
         <DemoNotice />

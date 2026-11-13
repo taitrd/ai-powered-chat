@@ -59,6 +59,9 @@ export async function parseError(
     if (typeof body?.code === "string") code = body.code;
     if (typeof body?.detail === "string") {
       message = body.detail;
+    } else if (typeof body?.detail?.message === "string") {
+      message = body.detail.message;
+      if (typeof body.detail.code === "string") code = body.detail.code;
     } else if (Array.isArray(body?.detail) && body.detail[0]?.msg) {
       message = body.detail.map((d: { msg: string }) => d.msg).join("; ");
     }

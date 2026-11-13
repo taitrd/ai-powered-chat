@@ -2,11 +2,13 @@ import * as messagesApi from "../../../services/api/messages/messagesApi";
 import type { Message, SendMessageArgs } from "../../../types";
 import type { AppThunk } from "../../index";
 import { createAppAsyncThunk, errorMessage } from "../../hooks";
-import { conversationTitleUpdated } from "../conversations/conversationsSlice";
+import { ApiError } from "../../../services/http/client";
+import { conversationCountsUpdated, conversationTitleUpdated } from "../conversations/conversationsSlice";
 import { wakingUpSet } from "../ui/uiSlice";
 import { fetchServiceStatus, isDailyLimitError, showToast } from "../ui/uiThunks";
 import {
   messageAdded,
+  messageDiscarded,
   streamDelta,
   streamFailed,
   streamFinished,
@@ -28,6 +30,34 @@ export const fetchMessages = createAppAsyncThunk(
       return await messagesApi.fetchMessages(conversationId);
     } catch (error) {
       return rejectWithValue(errorMessage(error, "Couldn't load messages."));
+    }
+  }
+);
+
+/** Loads the next older page of a conversation and puts it before the messages already shown. */
+export const fetchOlderMessages = createAppAsyncThunk(
+  "chat/fetchOlderMessages",
+  async (conversationId: string, { getState, rejectWithValue }) => {
+    const cursor = getState().chat.nextCursor[conversationId];
+    if (!cursor) return { items: [], next_cursor: null };
+    try {
+      return await messagesApi.fetchMessages(conversationId, cursor);
+    } catch (error) {
+      return rejectWithValue(errorMessage(error, "Couldn't load older messages."));
+    }
+  }
+);
+
+/** Clears a chat (keeps its title and provider) so the user can keep going in it. */
+export const clearMessages = createAppAsyncThunk(
+  "chat/clearMessages",
+  async (conversationId: string, { dispatch, rejectWithValue }) => {
+    try {
+      await messagesApi.clearMessages(conversationId);
+    } catch (error) {
+      const message = errorMessage(error, "Couldn't clear the chat.");
+      dispatch(showToast({ type: "error", message }));
+      return rejectWithValue(message);
     }
   }
 );
@@ -99,9 +129,18 @@ export const sendMessage = createAppAsyncThunk(
         dispatch(streamFinished({ conversationId, message }));
         dispatch(wakingUpSet(false));
       },
+      onCounts: (counts) => {
+        dispatch(conversationCountsUpdated({ id: conversationId, ...counts }));
+      },
       onError: (error) => {
         if (superseded()) return;
         dispatch(streamFailed(conversationId));
+        if (error instanceof ApiError && error.code === "conversation_full") {
+          // The chat filled up elsewhere: reload it so the full-chat panel appears.
+          dispatch(conversationCountsUpdated({ id: conversationId, messages_left: 0 }));
+          dispatch(messageDiscarded(conversationId));
+          return;
+        }
         if (isDailyLimitError(error)) {
           dispatch(fetchServiceStatus()); // Show the paused banner; retrying won't help today.
           dispatch(showToast({ type: "error", message: errorMessage(error, "Daily limit reached.") }));
