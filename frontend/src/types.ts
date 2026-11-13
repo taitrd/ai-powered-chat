@@ -16,8 +16,18 @@ export interface Conversation {
   id: string;
   title: string;
   provider_id: string | null;
+  /** Messages in the chat, questions and replies together. */
+  message_count: number;
+  /** Room left before the chat is full (see MAX_MESSAGES_PER_CONVERSATION). */
+  messages_left: number;
   created_at: string;
   updated_at: string;
+}
+
+/** One page of messages, oldest first. `next_cursor` fetches the next older page. */
+export interface MessagePage {
+  items: Message[];
+  next_cursor: string | null;
 }
 
 export interface Message {

@@ -74,7 +74,15 @@ const mockedApi = {
 
 function conversation(id: string, title = "New Chat"): Conversation {
   const now = new Date().toISOString();
-  return { id, title, provider_id: null, created_at: now, updated_at: now };
+  return {
+    id,
+    title,
+    provider_id: null,
+    message_count: 0,
+    messages_left: 100,
+    created_at: now,
+    updated_at: now,
+  };
 }
 
 function storeWithConversations(items: Conversation[], activeId: string | null = null) {
