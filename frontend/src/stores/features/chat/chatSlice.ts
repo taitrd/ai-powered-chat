@@ -13,7 +13,8 @@ export interface ChatState {
   /** Messages for each conversation, keyed by conversation ID. */
   byConversation: Record<string, Message[]>;
   loadingMessages: boolean;
-  loadingOlder: boolean;
+  /** Conversations with an older page being loaded. Per chat, so chats never share this state. */
+  loadingOlder: Record<string, boolean>;
   /** Cursor for the next older page of each conversation, or null when all are loaded. */
   nextCursor: Record<string, string | null>;
   /**
@@ -27,7 +28,7 @@ export interface ChatState {
 export const initialState: ChatState = {
   byConversation: {},
   loadingMessages: false,
-  loadingOlder: false,
+  loadingOlder: {},
   nextCursor: {},
   streams: {},
 };
@@ -84,19 +85,21 @@ const chatSlice = createSlice({
       .addCase(fetchMessages.rejected, (state) => {
         state.loadingMessages = false;
       })
-      .addCase(fetchOlderMessages.pending, (state) => {
-        state.loadingOlder = true;
+      .addCase(fetchOlderMessages.pending, (state, action) => {
+        state.loadingOlder[action.meta.arg] = true;
       })
       .addCase(fetchOlderMessages.fulfilled, (state, action) => {
-        state.loadingOlder = false;
         const id = action.meta.arg;
+        delete state.loadingOlder[id];
+        // The chat was cleared or reloaded while this page was in flight: drop the stale page.
+        if (state.nextCursor[id] !== action.payload.requestedCursor) return;
         const known = new Set((state.byConversation[id] ?? []).map((m) => m.id));
         const older = action.payload.items.filter((m) => !known.has(m.id));
         state.byConversation[id] = [...older, ...(state.byConversation[id] ?? [])];
         state.nextCursor[id] = action.payload.next_cursor;
       })
-      .addCase(fetchOlderMessages.rejected, (state) => {
-        state.loadingOlder = false;
+      .addCase(fetchOlderMessages.rejected, (state, action) => {
+        delete state.loadingOlder[action.meta.arg];
       })
       .addCase(clearMessages.fulfilled, (state, action) => {
         const id = action.meta.arg;
@@ -127,6 +130,12 @@ export const selectActiveMessages = (state: RootState): Message[] => {
 export const selectHasOlder = (state: RootState): boolean => {
   const { activeId } = state.conversations;
   return Boolean(activeId && state.chat.nextCursor[activeId]);
+};
+
+/** Whether an older page is loading for the active conversation. */
+export const selectLoadingOlder = (state: RootState): boolean => {
+  const { activeId } = state.conversations;
+  return Boolean(activeId && state.chat.loadingOlder[activeId]);
 };
 
 /** The reply streaming into the active conversation, if any. */
