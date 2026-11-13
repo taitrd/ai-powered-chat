@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import delete as sql_delete
-from sqlalchemy import func, select, tuple_
+from sqlalchemy import func, select, tuple_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Conversation
@@ -98,3 +98,22 @@ async def delete(
         return False
     await session.commit()
     return True
+
+
+async def reserve_slots(
+    session: AsyncSession, conversation_id: uuid.UUID, limit: int, count: int = 2
+) -> int | None:
+    """Atomically take `count` slots (a question and its reply) and add one for the question.
+
+    Returns the new message_count, or None when the chat has no room. The check and the
+    increment are a single statement, so concurrent sends cannot both fit the last slot.
+    """
+    return await session.scalar(
+        update(Conversation)
+        .where(
+            Conversation.id == conversation_id,
+            Conversation.message_count + count <= limit,
+        )
+        .values(message_count=Conversation.message_count + 1, updated_at=func.now())
+        .returning(Conversation.message_count)
+    )
