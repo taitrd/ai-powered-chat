@@ -5,14 +5,11 @@ import os
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import event
 from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import create_async_engine
-from sqlalchemy.pool import NullPool
 
 from app.core.config import get_settings
 from app.db.models import Base
-from app.db.session import get_cached_iam_token
+from app.db.session import create_direct_engine, get_engine
 
 config = context.config
 if config.config_file_name is not None:
@@ -43,34 +40,15 @@ def do_run_migrations(connection: Connection) -> None:
 
 
 async def run_migrations_online() -> None:
-    settings = get_settings()
-    if settings.db_driver == "dataapi":
+    if get_settings().db_driver == "dataapi":
         # Through the RDS Data API (HTTPS), the same engine the app uses.
-        from app.db.session import get_engine
-
         async with get_engine().connect() as connection:
             await connection.run_sync(do_run_migrations)
             await connection.commit()
         return
 
-    url = database_url()
-    connect_args = {}
-    if "rds.amazonaws.com" in url or "ssl=" in url or settings.app_env == "prod":
-        connect_args["ssl"] = "require"
-
-    engine = create_async_engine(url, poolclass=NullPool, connect_args=connect_args)
-    if settings.db_auth_mode == "iam":
-
-        @event.listens_for(engine.sync_engine, "do_connect")
-        def _provide_iam_token(dialect, conn_rec, cargs, cparams):
-            host = cparams.get("host") or "localhost"
-            port = int(cparams.get("port") or 5432)
-            user = cparams.get("user") or "app"
-            cparams["password"] = get_cached_iam_token(
-                host=host, port=port, user=user, region=settings.aws_region
-            )
-            cparams["ssl"] = "require"
-
+    # Direct connection: same setup as the app (SSL, IAM tokens), but for an explicit URL.
+    engine = create_direct_engine(database_url())
     async with engine.connect() as connection:
         await connection.run_sync(do_run_migrations)
     await engine.dispose()
