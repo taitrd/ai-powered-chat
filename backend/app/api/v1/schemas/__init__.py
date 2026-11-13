@@ -7,7 +7,7 @@ from app.api.v1.schemas.conversations import (
     ConversationUpdate,
     Title,
 )
-from app.api.v1.schemas.messages import MessageCreate, MessageOut
+from app.api.v1.schemas.messages import MessageCreate, MessageOut, MessagePage
 from app.api.v1.schemas.models import ProviderOut
 
 __all__ = [
@@ -18,5 +18,6 @@ __all__ = [
     "ConversationPage",
     "MessageCreate",
     "MessageOut",
+    "MessagePage",
     "ProviderOut",
 ]

@@ -12,7 +12,11 @@ from app.db.models import User
 from app.db.session import get_session
 from app.repositories import conversations as conversations_repo
 from app.services.chat import prepare_user_turn, stream_chat_reply
-from app.services.limits import InvalidMessageLengthError, LimitExceededError
+from app.services.limits import (
+    ConversationFullError,
+    InvalidMessageLengthError,
+    LimitExceededError,
+)
 
 router = APIRouter(prefix="/conversations", tags=["messages"])
 
@@ -40,6 +44,11 @@ async def send_message(
         )
     except InvalidMessageLengthError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    except ConversationFullError as exc:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail={"code": "conversation_full", "message": str(exc)},
+        ) from exc
     except LimitExceededError as exc:
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, str(exc)) from exc
 

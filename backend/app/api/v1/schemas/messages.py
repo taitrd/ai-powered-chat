@@ -20,3 +20,10 @@ class MessageOut(BaseModel):
     provider: str | None
     model: str | None
     created_at: datetime
+
+
+class MessagePage(BaseModel):
+    """One page of messages, oldest first. `next_cursor` fetches the next older page."""
+
+    items: list[MessageOut]
+    next_cursor: str | None
