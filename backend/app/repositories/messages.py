@@ -1,24 +1,65 @@
 """Data access functions for messages."""
 
+import base64
+import binascii
 import uuid
 from datetime import datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import delete as sql_delete
+from sqlalchemy import func, select, tuple_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Conversation, Message
 
 
-async def list_for_conversation(
-    session: AsyncSession, conversation_id: uuid.UUID
-) -> list[Message]:
-    """Retrieve all messages for a conversation in chronological order."""
-    rows = await session.scalars(
+def encode_cursor(message: Message) -> str:
+    raw = f"{message.created_at.isoformat()}|{message.id}"
+    return base64.urlsafe_b64encode(raw.encode()).decode()
+
+
+def decode_cursor(cursor: str) -> tuple[datetime, uuid.UUID]:
+    try:
+        created_at, message_id = base64.urlsafe_b64decode(cursor.encode()).decode().split("|")
+        return datetime.fromisoformat(created_at), uuid.UUID(message_id)
+    except (binascii.Error, UnicodeDecodeError, ValueError) as exc:
+        raise ValueError("Invalid cursor format") from exc
+
+
+async def list_page(
+    session: AsyncSession,
+    conversation_id: uuid.UUID,
+    limit: int = 25,
+    before: str | None = None,
+) -> tuple[list[Message], str | None]:
+    """One page of messages, newest page first; each page is oldest-first.
+
+    `next_cursor` fetches the next older page. Uses the (conversation_id, created_at, id) index.
+    """
+    query = (
         select(Message)
         .where(Message.conversation_id == conversation_id)
-        .order_by(Message.created_at, Message.id)
+        .order_by(Message.created_at.desc(), Message.id.desc())
+        .limit(limit + 1)
     )
-    return list(rows)
+    if before:
+        created_at, message_id = decode_cursor(before)
+        query = query.where(tuple_(Message.created_at, Message.id) < (created_at, message_id))
+    rows = list(await session.scalars(query))
+    has_more = len(rows) > limit
+    page = rows[:limit]
+    next_cursor = encode_cursor(page[-1]) if has_more and page else None
+    return list(reversed(page)), next_cursor
+
+
+async def delete_all(session: AsyncSession, conversation_id: uuid.UUID) -> None:
+    """Delete every message of a conversation and reset its counter, in one transaction."""
+    await session.execute(sql_delete(Message).where(Message.conversation_id == conversation_id))
+    await session.execute(
+        update(Conversation)
+        .where(Conversation.id == conversation_id)
+        .values(message_count=0, updated_at=func.now())
+    )
+    await session.commit()
 
 
 async def get_recent_history(
@@ -55,32 +96,3 @@ async def add_message(
     await session.commit()
     await session.refresh(message)
     return message
-
-
-async def count_user_messages_since(
-    session: AsyncSession, user_id: uuid.UUID, since: datetime
-) -> int:
-    """Count user messages sent by user_id since a given timestamp."""
-    count = await session.scalar(
-        select(func.count(Message.id))
-        .join(Conversation)
-        .where(
-            Conversation.user_id == user_id,
-            Message.role == "user",
-            Message.created_at >= since,
-        )
-    )
-    return count or 0
-
-
-async def count_global_messages_since(
-    session: AsyncSession, since: datetime
-) -> int:
-    """Count user messages sent globally across all users since a given timestamp."""
-    count = await session.scalar(
-        select(func.count(Message.id)).where(
-            Message.role == "user",
-            Message.created_at >= since,
-        )
-    )
-    return count or 0

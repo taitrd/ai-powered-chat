@@ -1,13 +1,15 @@
 """SQLAlchemy models for users, conversations and messages."""
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import (
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     String,
     Text,
     Uuid,
@@ -50,6 +52,7 @@ class Conversation(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"))
     title: Mapped[str] = mapped_column(String(200), default="New Chat")
     provider_id: Mapped[str | None] = mapped_column(String(50))
+    message_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -62,7 +65,7 @@ class Message(Base):
     __tablename__ = "messages"
     __table_args__ = (
         CheckConstraint("role IN ('user', 'assistant')", name="ck_messages_role"),
-        Index("ix_messages_conversation_created", "conversation_id", "created_at"),
+        Index("ix_messages_conversation_created_id", "conversation_id", "created_at", "id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -78,3 +81,15 @@ class Message(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     conversation: Mapped[Conversation] = relationship(back_populates="messages")
+
+
+class DailyUsage(Base):
+    """Messages sent per user per UTC day, so limits never scan the messages table."""
+
+    __tablename__ = "daily_usage"
+
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    messages: Mapped[int] = mapped_column(Integer, default=0, server_default="0")

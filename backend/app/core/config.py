@@ -49,6 +49,8 @@ class Settings(BaseSettings):
     max_output_tokens: int = 8000
     daily_user_message_limit: int = 30
     daily_global_message_limit: int = 200
+    max_messages_per_conversation: int = 100
+    message_page_size: int = 25
 
     @model_validator(mode="after")
     def _check_safe_combination(self) -> "Settings":
