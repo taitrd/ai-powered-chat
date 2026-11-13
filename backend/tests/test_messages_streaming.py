@@ -61,7 +61,7 @@ async def test_send_message_streaming(client: httpx.AsyncClient):
         headers=as_user("alice"),
     )
     assert msg_res.status_code == 200
-    messages = msg_res.json()
+    messages = msg_res.json()["items"]
     assert len(messages) == 2
     assert messages[0]["role"] == "user"
     assert messages[0]["content"] == "What is the capital of France?"

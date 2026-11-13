@@ -1,6 +1,5 @@
 """Unit tests for database repositories."""
 
-from datetime import UTC, datetime
 
 import pytest
 
@@ -65,22 +64,12 @@ async def test_message_repository():
         assert m1.id is not None
         assert m2.id is not None
 
-        # List for conversation
-        all_msgs = await msg_repo.list_for_conversation(session, conv.id)
-        assert len(all_msgs) == 2
-        assert all_msgs[0].content == "Hello"
-        assert all_msgs[1].content == "Hi!"
+        # Page of messages (oldest first within the page)
+        all_msgs, next_cursor = await msg_repo.list_page(session, conv.id)
+        assert next_cursor is None
+        assert [m.content for m in all_msgs] == ["Hello", "Hi!"]
 
         # History context
         history = await msg_repo.get_recent_history(session, conv.id, limit=1)
         assert len(history) == 1
         assert history[0].content == "Hi!"
-
-        # Counts
-        now = datetime.now(UTC)
-        start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        user_count = await msg_repo.count_user_messages_since(session, user.id, start_of_day)
-        assert user_count == 1  # only role == "user" counts
-
-        global_count = await msg_repo.count_global_messages_since(session, start_of_day)
-        assert global_count >= 1

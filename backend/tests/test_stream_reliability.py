@@ -64,7 +64,7 @@ def deltas(lines: list[str]) -> str:
 
 async def saved_messages(client: httpx.AsyncClient, conversation_id: str) -> list[dict]:
     response = await client.get(f"/api/v1/conversations/{conversation_id}/messages", headers=ALICE)
-    return response.json()
+    return response.json()["items"]
 
 
 async def test_slow_provider_reply_is_not_cut_off_by_heartbeat(client, monkeypatch):
