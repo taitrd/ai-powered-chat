@@ -139,7 +139,7 @@ async def test_messages_are_returned_oldest_first(client):
 
     response = await client.get(f"/api/v1/conversations/{created['id']}/messages", headers=ALICE)
     assert response.status_code == 200
-    assert [m["content"] for m in response.json()] == ["one", "two", "three"]
+    assert [m["content"] for m in response.json()["items"]] == ["one", "two", "three"]
 
 
 async def test_unknown_conversation_returns_404(client):
