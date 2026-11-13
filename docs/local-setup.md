@@ -58,6 +58,27 @@ cd iac && npx cdk synth            # infrastructure
 
 Tests never call real AI services.
 
+## Trying the frontend on the `chat_test` database
+
+```bash
+make up-test     # API + frontend use chat_test (migrated on start)
+make seed-test   # optional: 1M messages and query plans
+make up          # back to the normal chat database
+```
+
+Running `make test` wipes `chat_test`, so reseed afterwards.
+
+## Checking query plans at scale (local only)
+
+Load 1M messages into the local test database and print `EXPLAIN ANALYZE` for the hot queries:
+
+```bash
+cd backend && ../.venv/bin/python -m scripts.seed_messages \
+  --dsn postgresql://chat:chat@localhost:5432/chat_test --messages 1000000
+```
+
+The script refuses non-local hosts. Never seed Aurora: it adds storage and keeps the database awake.
+
 ## Problems
 
 | Problem | Fix |
