@@ -38,13 +38,20 @@ export const fetchMessages = createAppAsyncThunk(
 export const fetchOlderMessages = createAppAsyncThunk(
   "chat/fetchOlderMessages",
   async (conversationId: string, { getState, rejectWithValue }) => {
-    const cursor = getState().chat.nextCursor[conversationId];
-    if (!cursor) return { items: [], next_cursor: null };
+    const requestedCursor = getState().chat.nextCursor[conversationId] ?? null;
     try {
-      return await messagesApi.fetchMessages(conversationId, cursor);
+      const page = await messagesApi.fetchMessages(conversationId, requestedCursor ?? undefined);
+      return { ...page, requestedCursor };
     } catch (error) {
       return rejectWithValue(errorMessage(error, "Couldn't load older messages."));
     }
+  },
+  {
+    // Nothing older to load, or this chat is already loading a page.
+    condition: (conversationId, { getState }) => {
+      const { nextCursor, loadingOlder } = getState().chat;
+      return Boolean(nextCursor[conversationId]) && !loadingOlder[conversationId];
+    },
   }
 );
 

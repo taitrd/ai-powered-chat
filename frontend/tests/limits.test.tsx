@@ -7,8 +7,14 @@ import { makeStore, type RootState } from "../src/stores";
 import { FullChatPanel } from "../src/components/FullChatPanel";
 import { ChatFeed } from "../src/components/ChatFeed";
 import { renderWithStore } from "../src/test/renderWithStore";
-import { selectActiveMessages, selectHasOlder } from "../src/stores/features/chat/chatSlice";
 import {
+  selectActiveMessages,
+  selectHasOlder,
+  selectLoadingOlder,
+} from "../src/stores/features/chat/chatSlice";
+import { conversationSelected } from "../src/stores/features/conversations/conversationsSlice";
+import {
+  clearMessages,
   fetchMessages,
   fetchOlderMessages,
   sendMessage,
@@ -81,6 +87,53 @@ describe("message pages", () => {
     const store = storeWith([conv("c1")]);
     await store.dispatch(fetchOlderMessages("c1"));
     expect(api.fetchMessages).not.toHaveBeenCalled();
+  });
+
+  it("keeps hasOlder and loading state separate for each conversation", async () => {
+    const store = storeWith([conv("c1"), conv("c2")]);
+    api.fetchMessages
+      .mockResolvedValueOnce({ items: [msg("a2")], next_cursor: "curA" }) // c1 newest
+      .mockResolvedValueOnce({ items: [msg("b1")], next_cursor: null }); // c2 newest
+    await store.dispatch(fetchMessages("c1"));
+    await store.dispatch(fetchMessages("c2"));
+
+    store.dispatch(conversationSelected("c1"));
+    expect(selectHasOlder(store.getState())).toBe(true);
+    store.dispatch(conversationSelected("c2"));
+    expect(selectHasOlder(store.getState())).toBe(false);
+
+    // c1 loading an older page must not show as loading in c2.
+    let release!: (page: { items: Message[]; next_cursor: string | null }) => void;
+    api.fetchMessages.mockReturnValueOnce(new Promise((resolve) => (release = resolve)));
+    const pending = store.dispatch(fetchOlderMessages("c1"));
+    expect(selectLoadingOlder(store.getState())).toBe(false); // c2 is active
+    store.dispatch(conversationSelected("c1"));
+    expect(selectLoadingOlder(store.getState())).toBe(true);
+
+    // A second request for the same chat is ignored while one is in flight.
+    await store.dispatch(fetchOlderMessages("c1"));
+    expect(api.fetchMessages).toHaveBeenCalledTimes(3);
+
+    release({ items: [msg("a1")], next_cursor: null });
+    await pending;
+    expect(selectLoadingOlder(store.getState())).toBe(false);
+    expect(store.getState().chat.byConversation["c2"].map((m) => m.id)).toEqual(["b1"]);
+  });
+
+  it("drops an older page that arrives after the chat was cleared", async () => {
+    const store = storeWith([conv("c1")]);
+    api.fetchMessages.mockResolvedValueOnce({ items: [msg("m2")], next_cursor: "cur" });
+    await store.dispatch(fetchMessages("c1"));
+
+    let release!: (page: { items: Message[]; next_cursor: string | null }) => void;
+    api.fetchMessages.mockReturnValueOnce(new Promise((resolve) => (release = resolve)));
+    const pending = store.dispatch(fetchOlderMessages("c1"));
+    api.clearMessages.mockResolvedValue();
+    await store.dispatch(clearMessages("c1"));
+
+    release({ items: [msg("old")], next_cursor: null });
+    await pending;
+    expect(store.getState().chat.byConversation["c1"]).toEqual([]);
   });
 
   it("shows a load-older button in the feed", () => {

@@ -11,7 +11,7 @@ import { DemoNotice } from "./components/DemoNotice";
 import { useAppDispatch, useAppSelector } from "./stores/hooks";
 import { initAuth } from "./stores/features/auth/authThunks";
 import { authModalToggled } from "./stores/features/auth/authSlice";
-import { selectActiveMessages, selectHasOlder } from "./stores/features/chat/chatSlice";
+import { selectActiveMessages, selectHasOlder, selectLoadingOlder } from "./stores/features/chat/chatSlice";
 import { fetchOlderMessages, sendMessage } from "./stores/features/chat/chatThunks";
 import { selectActiveConversation } from "./stores/features/conversations/conversationsSlice";
 import {
@@ -34,7 +34,7 @@ export const App: React.FC = () => {
   const activeConversation = useAppSelector(selectActiveConversation);
   const messages = useAppSelector(selectActiveMessages);
   const hasOlder = useAppSelector(selectHasOlder);
-  const loadingOlder = useAppSelector((s) => s.chat.loadingOlder);
+  const loadingOlder = useAppSelector(selectLoadingOlder);
   const loadingMessages = useAppSelector((s) => s.chat.loadingMessages);
   const creatingConversation = useAppSelector((s) => s.conversations.creatingConversation);
   const selectedModelId = useAppSelector((s) => s.ui.selectedModelId);
@@ -108,6 +108,7 @@ export const App: React.FC = () => {
 
         {/* Message Feed */}
         <ChatFeed
+          key={activeId ?? "none"} // Fresh scroll state for each conversation.
           messages={messages}
           loading={loadingMessages}
           hasOlder={hasOlder}
