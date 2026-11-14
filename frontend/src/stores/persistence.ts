@@ -12,8 +12,8 @@ import { initialState as uiInitial } from "./features/ui/uiSlice";
 const STORAGE_KEY = "chat-app-cache-v1";
 
 interface PersistedState {
-  conversations?: Pick<RootState["conversations"], "items" | "activeId">;
-  chat?: Pick<RootState["chat"], "byConversation">;
+  conversations?: Pick<RootState["conversations"], "items" | "activeId" | "fetchedAt">;
+  chat?: Pick<RootState["chat"], "byConversation" | "nextCursor" | "syncedAt">;
   ui?: Pick<RootState["ui"], "selectedModelId">;
 }
 
@@ -35,8 +35,14 @@ export function loadPersistedState(): Partial<RootState> | undefined {
         ...conversationsInitial,
         items: saved.conversations?.items ?? [],
         activeId: saved.conversations?.activeId ?? null,
+        fetchedAt: saved.conversations?.fetchedAt ?? null,
       },
-      chat: { ...chatInitial, byConversation: saved.chat?.byConversation ?? {} },
+      chat: {
+        ...chatInitial,
+        byConversation: saved.chat?.byConversation ?? {},
+        nextCursor: saved.chat?.nextCursor ?? {},
+        syncedAt: saved.chat?.syncedAt ?? {},
+      },
       ui: { ...uiInitial, selectedModelId: saved.ui?.selectedModelId ?? "" },
     };
   } catch {
@@ -54,8 +60,13 @@ export function startPersistence(store: AppStore): () => void {
       conversations: {
         items: state.conversations.items,
         activeId: state.conversations.activeId,
+        fetchedAt: state.conversations.fetchedAt,
       },
-      chat: { byConversation: state.chat.byConversation },
+      chat: {
+        byConversation: state.chat.byConversation,
+        nextCursor: state.chat.nextCursor,
+        syncedAt: state.chat.syncedAt,
+      },
       ui: { selectedModelId: state.ui.selectedModelId },
     };
     // Redux returns the same object references when nothing changed, so streaming
@@ -64,7 +75,10 @@ export function startPersistence(store: AppStore): () => void {
       last &&
       last.conversations?.items === next.conversations?.items &&
       last.conversations?.activeId === next.conversations?.activeId &&
+      last.conversations?.fetchedAt === next.conversations?.fetchedAt &&
       last.chat?.byConversation === next.chat?.byConversation &&
+      last.chat?.nextCursor === next.chat?.nextCursor &&
+      last.chat?.syncedAt === next.chat?.syncedAt &&
       last.ui?.selectedModelId === next.ui?.selectedModelId
     ) {
       return;

@@ -25,9 +25,11 @@ const controllers = new Map<string, AbortController>();
 
 export const fetchMessages = createAppAsyncThunk(
   "chat/fetchMessages",
-  async (conversationId: string, { rejectWithValue }) => {
+  async (conversationId: string, { getState, rejectWithValue }) => {
+    // Remember which version of the chat these messages belong to.
+    const updatedAt = getState().conversations.items.find((c) => c.id === conversationId)?.updated_at;
     try {
-      return await messagesApi.fetchMessages(conversationId);
+      return { ...(await messagesApi.fetchMessages(conversationId)), updatedAt };
     } catch (error) {
       return rejectWithValue(errorMessage(error, "Couldn't load messages."));
     }

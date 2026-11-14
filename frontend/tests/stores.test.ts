@@ -294,7 +294,7 @@ describe("chat streaming", () => {
     expect(selectIsStreaming(store.getState(), "c1")).toBe(false);
     const chat1 = store.getState().chat.byConversation["c1"];
     expect(chat1.map((m) => m.content)).toEqual(["Hi", "Reply for chat 1"]); // saved to chat 1
-    expect(store.getState().chat.byConversation["c2"]).toBeUndefined();
+    expect(store.getState().chat.byConversation["c2"]).toEqual([]); // known empty, never fetched
   });
 
   it("stopping one chat doesn't stop another chat's reply", async () => {
