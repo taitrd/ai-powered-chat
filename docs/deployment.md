@@ -38,12 +38,10 @@ npm run cdk -- bootstrap aws://<ACCOUNT_ID>/us-east-1
 # 2. Store the Gemini key in SSM (reads GEMINI_API_KEY from .env)
 ../backend/scripts/set-ssm.sh
 
-# 3. Create the database, add the app user, run migrations (all through the RDS Data API)
+# 3. Create the database and run migrations (through the RDS Data API)
 npm run cdk -- deploy ChatAuth ChatData
 cd ../backend && python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
 set -a; . ../.env.iac; set +a
-.venv/bin/python -m scripts.setup_data_api_user \
-  --cluster-arn <ClusterArn> --admin-secret-arn <AdminSecretArn> --user-secret-arn <DataApiSecretArn>
 ./scripts/migrate.sh prod
 cd ../iac
 
@@ -57,7 +55,7 @@ curl https://<your-domain>/healthz
 
 Then open the site, sign up, and send a message.
 
-**The database is private:** it has no public IP and accepts no direct connections. The app, the setup script and migrations all reach it through the **RDS Data API** over HTTPS. The ARNs above are `ChatData` stack outputs. You only run step 3 by hand for the very first deployment: after that, **every GitHub Actions deploy creates or updates the app user and runs migrations automatically**, before the new app version goes live. For ad-hoc SQL, use the RDS console's **Query editor**, which also uses the Data API.
+**The database is private:** it has no public IP and accepts no direct connections. The app and migrations both reach it through the **RDS Data API** over HTTPS. You only run step 3 by hand for the very first deployment: after that, **every GitHub Actions deploy runs migrations automatically**, before the new app version goes live. For ad-hoc SQL, use the RDS console's **Query editor**, which also uses the Data API.
 
 - **Postgres password:** for step 3, it's in Secrets Manager.
 - **Updating one stack:** deploy it by name, for example `npm run cdk -- deploy ChatApi`.

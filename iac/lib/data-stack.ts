@@ -2,7 +2,6 @@ import * as cdk from "aws-cdk-lib";
 import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as rds from "aws-cdk-lib/aws-rds";
-import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import { Construct } from "constructs";
 
 export interface DataStackProps extends cdk.StackProps {
@@ -19,7 +18,6 @@ export class DataStack extends cdk.Stack {
   public readonly vpc: ec2.Vpc;
   public readonly securityGroup: ec2.SecurityGroup;
   /** Password login for the Data API user `app_data` (the Data API can't use IAM tokens). */
-  public readonly dataApiSecret: secretsmanager.Secret;
 
   constructor(scope: Construct, id: string, props?: DataStackProps) {
     super(scope, id, props);
@@ -71,30 +69,6 @@ export class DataStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
-    // Credentials for the `app_data` database user. Data API logins use a Secrets Manager
-    // secret with username and password; the role itself is created with SQL
-    // (backend/scripts/init-data-api-user.sql). No punctuation keeps the SQL quoting simple.
-    this.dataApiSecret = new secretsmanager.Secret(this, "DataApiUserSecret", {
-      secretName: "chat-app/db/app_data",
-      description: "Aurora login for the RDS Data API user app_data",
-      generateSecretString: {
-        secretStringTemplate: JSON.stringify({ username: "app_data" }),
-        generateStringKey: "password",
-        excludePunctuation: true,
-        passwordLength: 40,
-      },
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
-    });
-
-    // MIGRATION STEP 1 of 2 (saves one Secrets Manager secret, about $0.40/month).
-    // The API now uses the cluster's admin secret, so this secret is unused. It stays for one
-    // deploy because ChatApi imported its ARN, and CloudFormation refuses to remove an export
-    // that a deployed stack still imports. exportValue keeps that export alive.
-    // STEP 2 (next deploy): delete this secret, this line, the DataApiSecretArn output, and the
-    // setup_data_api_user step in deploy.yml; then delete the retained secret by hand:
-    //   aws secretsmanager delete-secret --secret-id chat-app/db/app_data --force-delete-without-recovery
-    this.exportValue(this.dataApiSecret.secretArn);
-
     if (props?.dataApiOperatorUser) {
       // A managed policy, not an inline one: IAM caps a user's inline policies at 2,048 bytes.
       new iam.ManagedPolicy(this, "DataApiOperatorPolicy", {
@@ -113,7 +87,7 @@ export class DataStack extends cdk.Stack {
           }),
           new iam.PolicyStatement({
             actions: ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"],
-            resources: [this.cluster.secret!.secretArn, this.dataApiSecret.secretArn],
+            resources: [this.cluster.secret!.secretArn],
           }),
         ],
       });
@@ -122,11 +96,6 @@ export class DataStack extends cdk.Stack {
     new cdk.CfnOutput(this, "ClusterArn", {
       value: this.cluster.clusterArn,
       description: "Aurora cluster ARN (DATA_API_RESOURCE_ARN)",
-    });
-
-    new cdk.CfnOutput(this, "DataApiSecretArn", {
-      value: this.dataApiSecret.secretArn,
-      description: "Secret for the app_data user (DATA_API_SECRET_ARN)",
     });
 
     new cdk.CfnOutput(this, "AdminSecretArn", {
