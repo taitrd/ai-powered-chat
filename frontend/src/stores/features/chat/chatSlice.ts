@@ -1,6 +1,7 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import type { Message } from "../../../types";
 import type { RootState } from "../../index";
+import { createConversation } from "../conversations/conversationsThunks";
 import { clearMessages, fetchMessages, fetchOlderMessages } from "./chatThunks";
 
 /** A reply being streamed into one conversation. */
@@ -18,6 +19,11 @@ export interface ChatState {
   /** Cursor for the next older page of each conversation, or null when all are loaded. */
   nextCursor: Record<string, string | null>;
   /**
+   * The conversation's `updated_at` when its cached messages were last loaded or known to be
+   * current. Messages are fetched again only when the conversation has changed since.
+   */
+  syncedAt: Record<string, string>;
+  /**
    * Replies in progress, keyed by conversation ID. Each conversation has its own
    * stream, so a new or different chat never shows another chat's "Thinking..." state,
    * and a reply keeps streaming into its own chat while you look at another one.
@@ -30,6 +36,7 @@ export const initialState: ChatState = {
   loadingMessages: false,
   loadingOlder: {},
   nextCursor: {},
+  syncedAt: {},
   streams: {},
 };
 
@@ -81,6 +88,7 @@ const chatSlice = createSlice({
         state.loadingMessages = false;
         state.byConversation[action.meta.arg] = action.payload.items;
         state.nextCursor[action.meta.arg] = action.payload.next_cursor;
+        if (action.payload.updatedAt) state.syncedAt[action.meta.arg] = action.payload.updatedAt;
       })
       .addCase(fetchMessages.rejected, (state) => {
         state.loadingMessages = false;
@@ -100,6 +108,13 @@ const chatSlice = createSlice({
       })
       .addCase(fetchOlderMessages.rejected, (state, action) => {
         delete state.loadingOlder[action.meta.arg];
+      })
+      .addCase(createConversation.fulfilled, (state, action) => {
+        // A new chat is empty by definition: no need to ask the server for its messages.
+        const { id, updated_at } = action.payload;
+        state.byConversation[id] = [];
+        state.nextCursor[id] = null;
+        state.syncedAt[id] = updated_at;
       })
       .addCase(clearMessages.fulfilled, (state, action) => {
         const id = action.meta.arg;

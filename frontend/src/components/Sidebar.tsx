@@ -11,6 +11,7 @@ import {
   PanelLeftClose,
   LogOut,
   Loader2,
+  RefreshCw,
 } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "../stores/hooks";
 import { authModalToggled } from "../stores/features/auth/authSlice";
@@ -19,6 +20,7 @@ import {
   createConversation,
   deleteConversation,
   openConversation,
+  refreshConversations,
   renameConversation,
 } from "../stores/features/conversations/conversationsThunks";
 import { modelSelected, sidebarOpenSet } from "../stores/features/ui/uiSlice";
@@ -132,7 +134,7 @@ export const Sidebar: React.FC = () => {
         </div>
 
         {/* Action button */}
-        <div className="p-3">
+        <div className="p-3 flex gap-2">
           <button
             onClick={handleNewChat}
             disabled={creatingConversation}
@@ -149,6 +151,15 @@ export const Sidebar: React.FC = () => {
                 <span>New Chat</span>
               </>
             )}
+          </button>
+          <button
+            onClick={() => dispatch(refreshConversations())}
+            disabled={loadingConversations}
+            title="Refresh chats from the server"
+            aria-label="Refresh chats"
+            className="shrink-0 px-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 disabled:opacity-60 text-gray-300 transition-colors"
+          >
+            <RefreshCw className={`w-4 h-4 ${loadingConversations ? "animate-spin" : ""}`} />
           </button>
         </div>
 

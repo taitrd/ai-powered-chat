@@ -12,6 +12,8 @@ import {
 export interface ConversationsState {
   items: Conversation[];
   activeId: string | null;
+  /** When the list was last loaded from the server (ms since epoch), or null if never. */
+  fetchedAt: number | null;
   loadingConversations: boolean;
   creatingConversation: boolean;
   /** IDs of conversations with a rename or delete in progress. */
@@ -21,6 +23,7 @@ export interface ConversationsState {
 export const initialState: ConversationsState = {
   items: [],
   activeId: null,
+  fetchedAt: null,
   loadingConversations: false,
   creatingConversation: false,
   pendingIds: [],
@@ -65,6 +68,7 @@ const conversationsSlice = createSlice({
       })
       .addCase(fetchConversations.fulfilled, (state, action) => {
         state.loadingConversations = false;
+        state.fetchedAt = Date.now();
         state.items = action.payload.items;
         const activeStillExists = state.items.some((c) => c.id === state.activeId);
         if (!activeStillExists) {

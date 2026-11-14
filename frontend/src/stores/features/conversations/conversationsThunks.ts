@@ -62,12 +62,39 @@ export const deleteConversation = createAppAsyncThunk(
   },
 );
 
-/** Makes a conversation active and loads its messages. */
+/** The conversation list is reloaded when it is older than this (PLAN.md, Section 5E). */
+export const LIST_MAX_AGE_MS = 60 * 60 * 1000;
+
+/**
+ * Loads a conversation's messages only when needed: there is no cached copy, or the
+ * conversation changed since the copy was saved. Otherwise the cache is used, so
+ * opening a chat doesn't call the API (and doesn't wake the database).
+ */
+export const loadMessagesIfStale =
+  (id: string, { force = false }: { force?: boolean } = {}): AppThunk =>
+  (dispatch, getState) => {
+    const { chat, conversations } = getState();
+    const conversation = conversations.items.find((c) => c.id === id);
+    const cached = chat.byConversation[id] !== undefined;
+    const current = cached && conversation !== undefined && chat.syncedAt[id] === conversation.updated_at;
+    if (!force && current) return;
+    dispatch(fetchMessages(id));
+  };
+
+/** Makes a conversation active and loads its messages if the cached copy is missing or old. */
 export const openConversation =
   (id: string): AppThunk =>
   (dispatch) => {
     dispatch(conversationSelected(id));
-    dispatch(fetchMessages(id));
+    dispatch(loadMessagesIfStale(id));
+  };
+
+/** The refresh button: reload the list now, then the active chat's messages if they changed. */
+export const refreshConversations =
+  (): AppThunk<Promise<void>> => async (dispatch, getState) => {
+    await dispatch(fetchConversations());
+    const { activeId } = getState().conversations;
+    if (activeId) dispatch(loadMessagesIfStale(activeId));
   };
 
 /** Initial load: providers and conversations (if authenticated), then the active conversation's messages. */
@@ -80,8 +107,12 @@ export const loadInitialData =
     if (fetchServiceStatus.fulfilled.match(status) && status.payload.paused) return;
     const { authMode, isAuthenticated } = getState().auth;
     if (authMode === "local" || isAuthenticated) {
-      await dispatch(fetchConversations());
+      // Use the browser cache while it is fresh: no API call, no wait for the database.
+      const { items, fetchedAt } = getState().conversations;
+      const listIsFresh =
+        items.length > 0 && fetchedAt !== null && Date.now() - fetchedAt < LIST_MAX_AGE_MS;
+      if (!listIsFresh) await dispatch(fetchConversations());
       const { activeId } = getState().conversations;
-      if (activeId) dispatch(fetchMessages(activeId));
+      if (activeId) dispatch(loadMessagesIfStale(activeId));
     }
   };
