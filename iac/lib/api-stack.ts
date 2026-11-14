@@ -15,7 +15,7 @@ export interface ApiStackProps extends cdk.StackProps {
   clusterIdentifier: string;
   clusterResourceIdentifier?: string;
   awakeCapHours?: number;
-  /** Aurora cluster ARN and app_data secret ARN, for the RDS Data API. */
+  /** Aurora cluster ARN and the secret (database login) the Data API uses. */
   clusterArn: string;
   dataApiSecretArn: string;
   /** "asyncpg" connects directly with IAM tokens; "dataapi" uses the RDS Data API. */
@@ -66,7 +66,7 @@ export class ApiStack extends cdk.Stack {
       invokeMode: lambda.InvokeMode.RESPONSE_STREAM,
     });
 
-    // IAM Permissions: RDS Data API (SQL over HTTPS) as the app_data user only.
+    // IAM Permissions: RDS Data API (SQL over HTTPS) using the cluster secret.
     this.apiFunction.addToRolePolicy(
       new iam.PolicyStatement({
         actions: [

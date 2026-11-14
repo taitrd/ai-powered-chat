@@ -86,6 +86,15 @@ export class DataStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
+    // MIGRATION STEP 1 of 2 (saves one Secrets Manager secret, about $0.40/month).
+    // The API now uses the cluster's admin secret, so this secret is unused. It stays for one
+    // deploy because ChatApi imported its ARN, and CloudFormation refuses to remove an export
+    // that a deployed stack still imports. exportValue keeps that export alive.
+    // STEP 2 (next deploy): delete this secret, this line, the DataApiSecretArn output, and the
+    // setup_data_api_user step in deploy.yml; then delete the retained secret by hand:
+    //   aws secretsmanager delete-secret --secret-id chat-app/db/app_data --force-delete-without-recovery
+    this.exportValue(this.dataApiSecret.secretArn);
+
     if (props?.dataApiOperatorUser) {
       // A managed policy, not an inline one: IAM caps a user's inline policies at 2,048 bytes.
       new iam.ManagedPolicy(this, "DataApiOperatorPolicy", {

@@ -62,7 +62,8 @@ const apiStack = new ApiStack(app, "ChatApi", {
   clusterEndpoint: dataStack.cluster.clusterEndpoint.hostname,
   clusterIdentifier: dataStack.cluster.clusterIdentifier,
   clusterArn: dataStack.cluster.clusterArn,
-  dataApiSecretArn: dataStack.dataApiSecret.secretArn,
+  // One secret for the Data API: the cluster's own (admin) secret. See data-stack.ts.
+  dataApiSecretArn: dataStack.cluster.secret!.secretArn,
   dbDriver: app.node.tryGetContext("dbDriver") === "dataapi" ? "dataapi" : "asyncpg",
   awakeCapHours,
 });
