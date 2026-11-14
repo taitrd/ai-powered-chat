@@ -54,9 +54,20 @@ const dataApiOperatorUser =
   (app.node.tryGetContext("dataApiOperatorUser") as string) || undefined;
 const dataStack = new DataStack(app, "ChatData", { env, dataApiOperatorUser });
 
+// Version for the Lambda container image tag: `-c appVersion=...` (CI passes version, run
+// number and commit), otherwise the version in iac/package.json. ECR tags may only contain
+// letters, digits, "_", "." and "-", and at most 128 characters (the hash adds 64).
+const appVersion = String(
+  app.node.tryGetContext("appVersion") ||
+    (require("../package.json") as { version: string }).version,
+).replace(/[^A-Za-z0-9_.-]/g, "-").slice(0, 50);
+
 // 3. API stack (FastAPI on Lambda with Lambda Web Adapter & Awake Guard)
 const apiStack = new ApiStack(app, "ChatApi", {
   env,
+  // The image is pushed as `v<appVersion>-<content hash>`, so a release is readable in ECR
+  // and the same code always gets the same hash. Only this stack builds an image.
+  synthesizer: new cdk.DefaultStackSynthesizer({ dockerTagPrefix: `v${appVersion}-` }),
   userPoolId: authStack.userPool.userPoolId,
   userPoolClientId: authStack.userPoolClient.userPoolClientId,
   clusterEndpoint: dataStack.cluster.clusterEndpoint.hostname,

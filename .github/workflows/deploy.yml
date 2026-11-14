@@ -200,7 +200,9 @@ jobs:
       - name: Deploy CDK Stacks
         run: |
           cd iac
-          npx cdk deploy --all --require-approval never
+          # Image tag becomes v<version>-<run>-<commit>-<content hash> in ECR.
+          version="$(node -p "require('./package.json').version")-${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}"
+          npx cdk deploy --all --require-approval never -c appVersion="$version"
 
       # Apply the daily-cap state now instead of waiting up to 15 minutes for the schedule.
       - name: Run Awake Guard Once
